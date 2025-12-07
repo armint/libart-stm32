@@ -1,0 +1,25 @@
+# libart-stm32/cmake/art-stm32Config.cmake.in
+@PACKAGE_INIT@
+
+# Ensure dependencies are available before loading the targets they reference
+include(CMakeFindDependencyMacro)
+
+# art-stm32 depends on:
+#  - art::core (package: art-core)
+#  - system-stm32 (package: system-stm32)
+#  - etl::etl (package: etl)
+find_dependency(art-core)
+find_dependency(system-stm32)
+find_dependency(etl)
+
+# Load the exported targets for this package (installed by install(EXPORT ...))
+include("${CMAKE_CURRENT_LIST_DIR}/art-stm32-targets.cmake")
+
+# Re-attach header-only dependencies to the imported target so consumers
+# automatically inherit include directories and usage requirements.
+if (TARGET art::stm32)
+    target_link_libraries(art::stm32 INTERFACE etl::etl)
+endif()
+
+# Optional: ensure all requested components are found (if you define any)
+check_required_components(art-stm32)
