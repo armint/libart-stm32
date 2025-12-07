@@ -3,8 +3,7 @@
 Serial::Serial(USART_TypeDef *usartTypeDef, std::span<uint8_t> txBuffer, std::span<uint8_t> rxBuffer)
    : usart(usartTypeDef)
    , txBuffer(txBuffer.data(), txBuffer.size())
-   , rxBuffer(rxBuffer.data(), rxBuffer.size()) {
-}
+   , rxBuffer(rxBuffer.data(), rxBuffer.size()) {}
 
 
 void Serial::handleInterrupt() {
@@ -26,8 +25,7 @@ void Serial::handleInterrupt() {
       }
       rxBuffer.push(c);
    }
-   // Clear all flags
-   // usart.usart.STATR = 0;
+   usart.clearAllStatusFlags();
 }
 
 
@@ -36,11 +34,11 @@ std::expected<void, Writable::Error> Serial::flush(size_t count) {
    utils::Timeout timeout(5000);
    size_t toFlush = std::min(count, static_cast<size_t>(txBuffer.size()));
    while(!txBuffer.empty() && !timeout.hasExpired() && toFlush > 0) {
-      // if(usart.isTxRegisterEmpty()) {
-      //    usart.setData(txBuffer.front());
-      //    txBuffer.pop();
-      //    toFlush--;
-      // }
+      if(usart.isTxRegisterEmpty()) {
+         usart.setData(txBuffer.front());
+         txBuffer.pop();
+         toFlush--;
+      }
    }
    if(timeout.hasExpired()) {
       return std::unexpected(CouldNotWrite);
