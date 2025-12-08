@@ -22,6 +22,7 @@ class Serial : public Writable, public Readable {
    Uart usart;
    etl::circular_buffer_ext<uint8_t> txBuffer;
    etl::circular_buffer_ext<uint8_t> rxBuffer;
+   uint32_t read_timeout = 10; // fairly arbitrary default value
 
    virtual std::expected<void, Writable::Error> flush(size_t count);
 
@@ -34,10 +35,18 @@ class Serial : public Writable, public Readable {
 
    Serial(USART_TypeDef *usartTypeDef, std::span<uint8_t> txBuffer, std::span<uint8_t> rxBuffer);
 
-   ~Serial() = default;
+   ~Serial() override = default;
 
-   virtual std::expected<size_t, Writable::Error> write(std::span<const uint8_t> data) override;
-   virtual std::expected<void, Writable::Error> flush() override;
+   std::expected<size_t, Writable::Error> write(std::span<const uint8_t> data) override;
+   std::expected<void, Writable::Error> flush() override;
+   std::expected<char, Readable::Error> read() override;
+   bool available() override;
+
+
+   void set_read_timeout(uint32_t timeout) {
+      read_timeout = timeout;
+   }
+
 
    void handleInterrupt();
 };
