@@ -1,0 +1,30 @@
+#pragma once
+
+#include <expected>
+#include <span>
+
+#include <etl/circular_buffer.h>
+
+#include <peripherals/Uart.h>
+#include <streams/Readable.h>
+
+class SerialReadable : public Readable {
+   protected:
+   Uart &uart_;
+   etl::circular_buffer_ext<uint8_t> rxBuffer;
+   uint32_t read_timeout = 10; // fairly arbitrary default value
+
+   public:
+   explicit SerialReadable(Uart &uart, std::span<uint8_t> rxBuffer);
+   ~SerialReadable() override = default;
+
+   std::expected<char, Error> read() override;
+   bool available() override;
+
+   void set_read_timeout(uint32_t timeout) {
+      read_timeout = timeout;
+   }
+
+   // To be called from the device ISR
+   void handleRxInterrupt();
+};
