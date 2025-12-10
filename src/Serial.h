@@ -1,30 +1,13 @@
 #pragma once
 
-#include <cstdarg>
-#include <cstddef>
-#include <expected>
-
-#include <etl/circular_buffer.h>
-
 #include <cmsis_device.h>
 
-#include <peripherals/Uart.h>
-#include <streams/Readable.h>
-#include <streams/Writable.h>
+#include "SerialReadable.h"
+#include "SerialWritable.h"
 
-/**
- * This class is used to write data to, and read data from a uart. It uses interrupts and buffers to minimize the load
- * on the processor and to make sure real-time processes are not disturbed.
- */
-class Serial : public Writable, public Readable {
-
+class Serial : public SerialWritable, public SerialReadable {
    protected:
    Uart usart;
-   etl::circular_buffer_ext<uint8_t> txBuffer;
-   etl::circular_buffer_ext<uint8_t> rxBuffer;
-   uint32_t read_timeout = 10; // fairly arbitrary default value
-
-   virtual std::expected<void, Writable::Error> flush(size_t count);
 
    public:
    // The rule of five.
@@ -37,16 +20,6 @@ class Serial : public Writable, public Readable {
 
    ~Serial() override = default;
 
-   std::expected<size_t, Writable::Error> write(std::span<const uint8_t> data) override;
-   std::expected<void, Writable::Error> flush() override;
-   std::expected<char, Readable::Error> read() override;
-   bool available() override;
-
-
-   void set_read_timeout(uint32_t timeout) {
-      read_timeout = timeout;
-   }
-
-
+   // Combined ISR handler
    void handleInterrupt();
 };
