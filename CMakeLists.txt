@@ -49,6 +49,13 @@ target_link_libraries(art-stm32
             etl::etl
 )
 
+# If a central build configuration target exists in the superproject,
+# link it so this library is built with the same flags/defines.
+if (TARGET art-build-config)
+    # Only affect this target's compilation in the build tree; do not appear in installed export
+    target_link_libraries(art-stm32 PRIVATE $<BUILD_INTERFACE:art-build-config>)
+endif ()
+
 # Ensure the exported interface does not pull non-exported targets.
 set_property(TARGET art-stm32 PROPERTY INTERFACE_LINK_LIBRARIES "")
 
