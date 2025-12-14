@@ -35,3 +35,7 @@ void SerialReadable::handleRxInterrupt() {
       rxBuffer.push(c);
    }
 }
+
+void SerialReadable::clear() {
+   rxBuffer.clear();
+}

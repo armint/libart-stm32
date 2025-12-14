@@ -6,9 +6,10 @@
 #include <etl/circular_buffer.h>
 
 #include <peripherals/Uart.h>
-#include <streams/Readable.h>
 
-class SerialReadable : public Readable {
+#include "streams/BufferedReadable.h"
+
+class SerialReadable : public BufferedReadable {
    protected:
    Uart &uart_;
    etl::circular_buffer_ext<uint8_t> rxBuffer;
@@ -27,4 +28,6 @@ class SerialReadable : public Readable {
 
    // To be called from the device ISR
    void handleRxInterrupt();
+
+   void clear() override;
 };
