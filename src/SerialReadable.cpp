@@ -2,7 +2,7 @@
 
 #include <utils/Timeout.h>
 
-SerialReadable::SerialReadable(Uart &uart, std::span<uint8_t> rx)
+SerialReadable::SerialReadable(Usart &uart, std::span<uint8_t> rx)
    : uart_(uart)
    , rxBuffer(rx.data(), rx.size()) {}
 

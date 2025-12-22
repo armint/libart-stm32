@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <utils/Timeout.h>
 
-SerialWritable::SerialWritable(Uart &uart, std::span<uint8_t> tx)
+SerialWritable::SerialWritable(Usart &uart, std::span<uint8_t> tx)
    : uart_(uart)
    , txBuffer(tx.data(), tx.size()) {}
 

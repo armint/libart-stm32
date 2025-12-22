@@ -7,7 +7,7 @@
 
 class Serial : public SerialWritable, public SerialReadable {
    protected:
-   Uart usart;
+   Usart usart;
 
    public:
    // The rule of five.

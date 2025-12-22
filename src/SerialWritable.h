@@ -5,18 +5,18 @@
 
 #include <etl/circular_buffer.h>
 
-#include <peripherals/Uart.h>
+#include <peripherals/Usart.h>
 #include <streams/Writable.h>
 
 class SerialWritable : public Writable {
    protected:
-   Uart &uart_;
+   Usart &uart_;
    etl::circular_buffer_ext<uint8_t> txBuffer;
 
    std::expected<void, Error> flush(size_t count);
 
    public:
-   SerialWritable(Uart &uart, std::span<uint8_t> txBuffer);
+   SerialWritable(Usart &uart, std::span<uint8_t> txBuffer);
    ~SerialWritable() override = default;
 
    std::expected<size_t, Error> write(std::span<const uint8_t> data) override;
