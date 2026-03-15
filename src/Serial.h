@@ -17,13 +17,19 @@ class Serial : public SerialWritable, public SerialReadable {
    Serial &operator=(Serial &&) = delete;
 
    Serial(USART_TypeDef *usartTypeDef, std::span<uint8_t> txBuffer, std::span<uint8_t> rxBuffer);
-   Serial(USART_TypeDef *usartTypeDef, std::span<uint8_t> txBuffer, std::span<uint8_t> rxBuffer,
-          std::span<uint16_t> messageEndBuffer);
-   Serial(USART_TypeDef *usartTypeDef, std::span<uint8_t> txBuffer, std::span<uint8_t> rxBuffer,
-          std::span<uint16_t> messageEndBuffer, std::span<uint16_t> breakBuffer);
+   Serial(USART_TypeDef *usartTypeDef, std::span<uint8_t> txBuffer, std::span<uint8_t> rxBuffer, std::span<uint16_t> messageEndBuffer);
+   Serial(USART_TypeDef *usartTypeDef,
+          std::span<uint8_t> txBuffer,
+          std::span<uint8_t> rxBuffer,
+          std::span<uint16_t> messageEndBuffer,
+          std::span<uint16_t> breakBuffer);
 
    ~Serial() override = default;
 
    // Combined ISR handler
    void handleInterrupt();
+
+   Usart &uart() {
+      return usart;
+   }
 };
