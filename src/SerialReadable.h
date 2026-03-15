@@ -9,6 +9,8 @@
 
 #include "streams/BufferedReadable.h"
 
+using hw::Usart;
+
 class SerialReadable : public BufferedReadable {
    protected:
    Usart &uart_;

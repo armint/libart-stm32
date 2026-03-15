@@ -8,6 +8,8 @@
 #include <peripherals/Usart.h>
 #include <streams/Writable.h>
 
+using hw::Usart;
+
 class SerialWritable : public Writable {
    protected:
    Usart &uart_;

@@ -5,6 +5,8 @@
 #include "SerialReadable.h"
 #include "SerialWritable.h"
 
+using hw::Usart;
+
 class Serial : public SerialWritable, public SerialReadable {
    protected:
    Usart usart;
