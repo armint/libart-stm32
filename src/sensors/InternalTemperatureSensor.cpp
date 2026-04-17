@@ -1,8 +1,8 @@
 #include "InternalTemperatureSensor.h"
 #include "Adc.h"
 
-InternalTemperatureSensor::InternalTemperatureSensor(uint16_t &adcValue,
-                                                     uint16_t &vrefintAdcValue,
+InternalTemperatureSensor::InternalTemperatureSensor(volatile uint16_t &adcValue,
+                                                     volatile uint16_t &vrefintAdcValue,
                                                      uint32_t adcBits,
                                                      uint32_t (*getReferenceVoltageInmV)(uint32_t))
    : adcValue(adcValue)

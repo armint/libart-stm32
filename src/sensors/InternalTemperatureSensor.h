@@ -15,7 +15,7 @@ class InternalTemperatureSensor : public TemperatureSensor {
    uint32_t (*const getReferenceVoltageInmV)(uint32_t vrefintReg);
 
    public:
-   InternalTemperatureSensor(uint16_t &adcValue, uint16_t &vrefintAdcValue, uint32_t adcBits, uint32_t (*getReferenceVoltageInmV)(uint32_t));
+   InternalTemperatureSensor(volatile uint16_t &adcValue, volatile uint16_t &vrefintAdcValue, uint32_t adcBits, uint32_t (*getReferenceVoltageInmV)(uint32_t));
 
    Temperature_t getTemperature() override;
 
