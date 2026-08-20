@@ -18,13 +18,11 @@ class Serial : public SerialWritable, public SerialReadable {
    Serial &operator=(const Serial &) = delete;
    Serial &operator=(Serial &&) = delete;
 
-   Serial(USART_TypeDef *usartTypeDef, std::span<uint8_t> txBuffer, std::span<uint8_t> rxBuffer);
-   Serial(USART_TypeDef *usartTypeDef, std::span<uint8_t> txBuffer, std::span<uint8_t> rxBuffer, std::span<uint16_t> messageEndBuffer);
    Serial(USART_TypeDef *usartTypeDef,
-          std::span<uint8_t> txBuffer,
-          std::span<uint8_t> rxBuffer,
-          std::span<uint16_t> messageEndBuffer,
-          std::span<uint16_t> breakBuffer);
+          RingBufferBase<uint8_t> &txBuffer,
+          RingBufferBase<uint8_t> &rxBuffer,
+          RingBufferBase<uint16_t> *messageEndBuffer = nullptr,
+          RingBufferBase<uint16_t> *breakBuffer = nullptr);
 
    ~Serial() override = default;
 

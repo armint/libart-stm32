@@ -3,18 +3,18 @@
 #include <algorithm>
 #include <utils/Timeout.h>
 
-SerialWritable::SerialWritable(Usart &uart, std::span<uint8_t> tx)
+SerialWritable::SerialWritable(Usart &uart, RingBufferBase<uint8_t> &tx)
    : uart_(uart)
-   , txBuffer(tx.data(), tx.size()) {}
+   , txBuffer(tx) {}
 
 std::expected<void, Writable::Error> SerialWritable::flush(size_t count) {
    uart_.disableTxEmptyInterrupt();
    utils::Timeout timeout(5000);
    size_t toFlush = std::min(count, txBuffer.size());
+   uint8_t c;
    while(!txBuffer.empty() && !timeout.hasExpired() && toFlush > 0) {
-      if(uart_.isTxRegisterEmpty()) {
-         uart_.setData(txBuffer.front());
-         txBuffer.pop();
+      if(uart_.isTxRegisterEmpty() && txBuffer.try_pop(c)) {
+         uart_.setData(c);
          toFlush--;
       }
    }
@@ -40,7 +40,9 @@ std::expected<size_t, Writable::Error> SerialWritable::write(std::span<const uin
             return std::unexpected(res.error());
          }
       }
-      txBuffer.push(c);
+      if(!txBuffer.try_push(c)) {
+         return std::unexpected(CouldNotWrite);
+      }
    }
    uart_.enableTxEmptyInterrupt();
    return data.size();
@@ -48,9 +50,9 @@ std::expected<size_t, Writable::Error> SerialWritable::write(std::span<const uin
 
 void SerialWritable::handleTxInterrupt() {
    if(uart_.isTxRegisterEmpty() && uart_.isTxEmptyInterruptEnabled()) {
-      if(!txBuffer.empty()) {
-         uart_.setData(txBuffer.front());
-         txBuffer.pop();
+      uint8_t c;
+      if(txBuffer.try_pop(c)) {
+         uart_.setData(c);
       }
       if(txBuffer.empty()) {
          // Disable transmit buffer empty interrupt
