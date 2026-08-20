@@ -3,7 +3,7 @@
 #include <expected>
 #include <span>
 
-#include <etl/circular_buffer.h>
+#include <utils/RingBuffer.h>
 
 #include <peripherals/Usart.h>
 
@@ -14,22 +14,21 @@ using hw::Usart;
 class SerialReadable : public BufferedReadable {
    protected:
    Usart &uart_;
-   etl::circular_buffer_ext<uint8_t> rxBuffer;
+   RingBufferBase<uint8_t> &rxBuffer;
    uint32_t read_timeout = 10; // fairly arbitrary default value
 
    // Position tracking for receiver timeout (EndOfMessage) and break detection.
    // Each uses an externally provided buffer of absolute stream positions.
-   // A feature is enabled when its buffer has capacity > 0.
-   etl::circular_buffer_ext<uint16_t> messageEndPositions_;
-   etl::circular_buffer_ext<uint16_t> breakPositions_;
+   // A feature is enabled when its buffer pointer is non-null.
+   RingBufferBase<uint16_t> *messageEndPositions_;
+   RingBufferBase<uint16_t> *breakPositions_;
    uint16_t writePos_ = 0;
    uint16_t readPos_ = 0;
 
    public:
-   explicit SerialReadable(Usart &uart, std::span<uint8_t> rxBuffer);
-   SerialReadable(Usart &uart, std::span<uint8_t> rxBuffer, std::span<uint16_t> messageEndBuffer);
-   SerialReadable(Usart &uart, std::span<uint8_t> rxBuffer, std::span<uint16_t> messageEndBuffer,
-                  std::span<uint16_t> breakBuffer);
+   explicit SerialReadable(Usart &uart, RingBufferBase<uint8_t> &rxBuffer,
+                            RingBufferBase<uint16_t> *messageEndBuffer = nullptr,
+                            RingBufferBase<uint16_t> *breakBuffer = nullptr);
    ~SerialReadable() override = default;
 
    std::expected<char, Error> read() override;
@@ -39,8 +38,8 @@ class SerialReadable : public BufferedReadable {
       read_timeout = timeout;
    }
 
-   [[nodiscard]] bool messageEndDetectionEnabled() const { return messageEndPositions_.max_size() > 0; }
-   [[nodiscard]] bool breakDetectionEnabled() const { return breakPositions_.max_size() > 0; }
+   [[nodiscard]] bool messageEndDetectionEnabled() const { return messageEndPositions_ != nullptr; }
+   [[nodiscard]] bool breakDetectionEnabled() const { return breakPositions_ != nullptr; }
 
    // To be called from the device ISR
    void handleRxInterrupt();

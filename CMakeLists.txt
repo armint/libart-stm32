@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.20)
 project(art-stm32 VERSION 0.1.0 LANGUAGES C CXX ASM)
 
 include(GNUInstallDirs)
-Include(FetchContent)
 
 # Sources / headers
 file(GLOB_RECURSE PROJECT_SOURCES
@@ -28,16 +27,7 @@ target_include_directories(
             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-# Bring in ETL using FetchContent (header-only)
-FetchContent_Declare(
-        etl
-        GIT_REPOSITORY https://github.com/ETLCPP/etl.git
-        GIT_TAG 20.41.7
-)
-
-FetchContent_MakeAvailable(etl)
-
-# Link against libArT core, system-stm32 and use ETL in this project
+# Link against libArT core and system-stm32.
 # We keep third-party deps PRIVATE here to avoid exporting build-tree targets
 # via our install(EXPORT ...) set. The installed package config will
 # re-attach transitive requirements for consumers.
@@ -45,8 +35,6 @@ target_link_libraries(art-stm32
         PUBLIC
             art::core
             system-stm32
-        PRIVATE
-            etl::etl
 )
 
 # If a central build configuration target exists in the superproject,
