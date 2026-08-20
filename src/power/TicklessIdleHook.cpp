@@ -18,14 +18,14 @@ uint32_t TicklessIdleHook::computeTimeToNextDeadlineMs() {
   }
 
   const auto diffTicks = deadline - now;
-  const uint32_t freqHz = os::rtos::sysclock.input_clock_frequency_hz();
-  if (freqHz == 0u || freqHz == 1000u) {
+  constexpr uint32_t freqHz = os::rtos::clock_systick::frequency_hz;
+  if constexpr (freqHz == 1000u) {
     return (diffTicks > UINT32_MAX) ? UINT32_MAX
                                     : static_cast<uint32_t>(diffTicks);
+  } else {
+    const uint64_t ms = (static_cast<uint64_t>(diffTicks) * 1000u) / freqHz;
+    return (ms > UINT32_MAX) ? UINT32_MAX : static_cast<uint32_t>(ms);
   }
-
-  const uint64_t ms = (static_cast<uint64_t>(diffTicks) * 1000u) / freqHz;
-  return (ms > UINT32_MAX) ? UINT32_MAX : static_cast<uint32_t>(ms);
 }
 
 void TicklessIdleHook::enterSleep() {
