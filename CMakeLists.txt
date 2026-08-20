@@ -4,6 +4,10 @@ project(art-stm32 VERSION 0.1.0 LANGUAGES C CXX ASM)
 
 include(GNUInstallDirs)
 
+if (BUILD_TESTING)
+    add_subdirectory(tests)
+endif ()
+
 # Sources / headers
 file(GLOB_RECURSE PROJECT_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"

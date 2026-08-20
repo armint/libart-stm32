@@ -3,10 +3,17 @@
 
 namespace power {
 
-PowerManager &PowerManager::instance() {
-  static PowerManager manager;
-  return manager;
-}
+PowerManager::PowerManager() = default;
+
+namespace {
+// Eager namespace-scope static instance: initialized at startup before main(),
+// avoiding runtime Meyers-singleton initialization locks (__cxa_guard_acquire)
+// so that PowerManager::instance() is always lock-free and safe to call from
+// ISRs.
+PowerManager globalPowerManager;
+} // namespace
+
+PowerManager &PowerManager::instance() { return globalPowerManager; }
 
 void PowerManager::acquire(SleepMode maxAllowedMode) {
   if (maxAllowedMode >= SleepMode::Stop2) {
