@@ -40,6 +40,9 @@ target_link_libraries(art-stm32
 if (TARGET micro-os-plus::iii)
     target_link_libraries(art-stm32 PUBLIC micro-os-plus::iii)
 endif ()
+if (TARGET micro-os-plus::architecture-cortexm)
+    target_link_libraries(art-stm32 PUBLIC micro-os-plus::architecture-cortexm)
+endif ()
 
 # If a central build configuration target exists in the superproject,
 # link it so this library is built with the same flags/defines.
