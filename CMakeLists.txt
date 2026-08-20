@@ -37,6 +37,10 @@ target_link_libraries(art-stm32
             system-stm32
 )
 
+if (TARGET micro-os-plus::iii)
+    target_link_libraries(art-stm32 PUBLIC micro-os-plus::iii)
+endif ()
+
 # If a central build configuration target exists in the superproject,
 # link it so this library is built with the same flags/defines.
 if (TARGET art-build-config)
