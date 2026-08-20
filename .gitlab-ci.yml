@@ -1,0 +1,33 @@
+stages:
+  - test
+
+image: "docker.vandertogt.org/firmware-builder:v1.14.0"
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: "$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS"
+      when: never
+    - if: "$CI_COMMIT_BRANCH"
+
+# Runs the host-native unit tests under tests/ (doctest). These cover the
+# hardware-independent logic (currently power::PowerManager) against stub
+# cmsis-plus headers, without needing a cross toolchain or the rest of the
+# embedded dependency graph (system-stm32, micro-os-plus).
+#
+# This repo's other sources (art-stm32 proper) statically link
+# system-stm32 and, for src/power/*, directly include cmsis-plus/rtos
+# headers from micro-os-plus -- there is no released/tagged version of
+# either to pin a standalone cross-compiled matrix build against (unlike
+# system-stm32, which now has its own family matrix). Building the full
+# embedded target is exercised today by sentinode-ht's own CI, which
+# builds this repo as a submodule. Revisit adding a cross-compiled job
+# here once system-stm32/micro-os-plus have real version tags to pin to.
+unit-tests:
+  stage: test
+  variables:
+    GIT_DEPTH: 0
+  script:
+    - cmake -S tests -B build-tests -G "Unix Makefiles" -D CMAKE_BUILD_TYPE=Release
+    - cmake --build build-tests -j$(nproc)
+    - ctest --test-dir build-tests --output-on-failure
