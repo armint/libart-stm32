@@ -1,0 +1,132 @@
+#include "TicklessIdleHook.h"
+#include <cmsis_device.h>
+
+namespace power {
+
+uint32_t TicklessIdleHook::computeTimeToNextDeadlineMs() {
+  os::rtos::interrupts::critical_section cs;
+  const auto *head = os::rtos::sysclock.steady_list().head();
+  if (head == nullptr) {
+    return UINT32_MAX;
+  }
+
+  const auto now = os::rtos::sysclock.now();
+  const auto deadline = head->timestamp;
+
+  if (deadline <= now) {
+    return 0u;
+  }
+
+  const auto diffTicks = deadline - now;
+  const uint32_t freqHz = os::rtos::sysclock.input_clock_frequency_hz();
+  if (freqHz == 0u || freqHz == 1000u) {
+    return (diffTicks > UINT32_MAX) ? UINT32_MAX
+                                    : static_cast<uint32_t>(diffTicks);
+  }
+
+  const uint64_t ms = (static_cast<uint64_t>(diffTicks) * 1000u) / freqHz;
+  return (ms > UINT32_MAX) ? UINT32_MAX : static_cast<uint32_t>(ms);
+}
+
+void TicklessIdleHook::enterSleep() {
+  __DSB();
+  __WFI();
+  __ISB();
+}
+
+void TicklessIdleHook::enterLPRun() {
+  if (enterLPRunCallback_) {
+    enterLPRunCallback_();
+  }
+  __DSB();
+  __WFI();
+  __ISB();
+  if (restoreClockCallback_) {
+    restoreClockCallback_();
+  }
+}
+
+void TicklessIdleHook::enterStop2(uint32_t durationMs) {
+  // 1. Arm RTC Wakeup Timer
+  rtc_.armWakeup(durationMs);
+
+  // 2. Read timestamp immediately prior to entering Stop 2
+  const uint64_t tsBefore = rtc_.getSubSecondTimestamp();
+
+  // 3. Suspend SysTick
+  SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;
+
+  // 4. Configure Cortex-M deep sleep and PWR Stop 2 mode
+  SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
+#if defined(PWR_CR1_LPMS)
+  PWR->CR1 = (PWR->CR1 & ~PWR_CR1_LPMS) | PWR_CR1_LPMS_1; // Stop 2
+#endif
+
+  // 5. Enter Stop 2
+  __DSB();
+  __WFI();
+  __ISB();
+
+  // 6. Wakeup path: Clear SLEEPDEEP
+  SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
+
+  // 7. Restore high-speed system clocks immediately
+  if (restoreClockCallback_) {
+    restoreClockCallback_();
+  }
+
+  // 8. Measure elapsed time across sleep (works for RTC WUT, Radio DIO1, or any
+  // EXTI)
+  const uint64_t tsAfter = rtc_.getSubSecondTimestamp();
+  const uint64_t elapsedMs = (tsAfter >= tsBefore) ? (tsAfter - tsBefore) : 0u;
+
+  // 9. Disarm Wakeup Timer
+  rtc_.disarmWakeup();
+
+  // 10. Update RTOS steady clock for the slept duration
+  if (elapsedMs > 0u) {
+    os::rtos::sysclock.update_for_slept_time(
+        static_cast<os::rtos::port::clock::duration_t>(elapsedMs));
+  }
+
+  // 11. Resume SysTick
+  SysTick->VAL = 0u;
+  SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk;
+
+  // 12. Trigger scheduler reschedule
+  os::rtos::port::scheduler::reschedule();
+}
+
+bool TicklessIdleHook::handleIdle() {
+  const SleepMode mode = PowerManager::instance().deepestAllowedMode();
+
+  switch (mode) {
+  case SleepMode::Run:
+    // No sleep allowed, yield execution
+    return true;
+
+  case SleepMode::Sleep:
+    enterSleep();
+    return true;
+
+  case SleepMode::LPRun:
+    enterLPRun();
+    return true;
+
+  case SleepMode::Stop2: {
+    const uint32_t deadlineMs = computeTimeToNextDeadlineMs();
+    if (deadlineMs <= minStop2DurationMs_) {
+      // Fast shallow sleep if deadline is within minimum overhead threshold
+      enterSleep();
+      return true;
+    }
+
+    enterStop2(deadlineMs);
+    return true;
+  }
+  }
+
+  return true;
+}
+
+} // namespace power
