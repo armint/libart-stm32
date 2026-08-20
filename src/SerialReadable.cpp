@@ -55,34 +55,22 @@ bool SerialReadable::available() {
 }
 
 void SerialReadable::handleRxInterrupt() {
+   // The ISR is the sole producer for rxBuffer/messageEndPositions_/breakPositions_;
+   // read() is the sole consumer. Never pop or peek any of them here — doing so
+   // would give a buffer two consumers, which the underlying lock-free ring
+   // buffer does not support and would corrupt silently.
    if(uart_.isRxRegisterNotEmpty() && uart_.isRxNotEmptyInterruptEnabled()) {
       bool isBreak = breakDetectionEnabled() && uart_.isFramingError();
       uint8_t c = uart_.getData();
-      if(rxBuffer.full()) {
-         // Buffer is full, discard oldest byte and any markers at that position
-         if(messageEndDetectionEnabled()) {
-            uint16_t pos = 0;
-            if(messageEndPositions_->peek(pos) && pos == readPos_) {
-               uint16_t discarded = 0;
-               static_cast<void>(messageEndPositions_->try_pop(discarded));
-            }
+      if(rxBuffer.try_push(c)) {
+         if(isBreak && c == 0x00) {
+            static_cast<void>(breakPositions_->try_push(writePos_));
          }
-         if(breakDetectionEnabled()) {
-            uint16_t pos = 0;
-            if(breakPositions_->peek(pos) && pos == readPos_) {
-               uint16_t discarded = 0;
-               static_cast<void>(breakPositions_->try_pop(discarded));
-            }
-         }
-         uint8_t discardedByte = 0;
-         static_cast<void>(rxBuffer.try_pop(discardedByte));
-         readPos_++;
+         writePos_++;
       }
-      static_cast<void>(rxBuffer.try_push(c));
-      if(isBreak && c == 0x00) {
-         static_cast<void>(breakPositions_->try_push(writePos_));
-      }
-      writePos_++;
+      // else: rxBuffer is full and read() hasn't caught up — drop the incoming
+      // byte (overrun). writePos_ stays put so it keeps tracking the number of
+      // bytes actually buffered.
    }
 
    // Receiver timeout fires after silence on the bus — no data byte, just a marker
