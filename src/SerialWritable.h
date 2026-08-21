@@ -1,12 +1,13 @@
 #pragma once
 
 #include <expected>
+#include <optional>
 #include <span>
 
 #include <utils/RingBuffer.h>
 
 #include <peripherals/Usart.h>
-#include <power/PowerManager.h>
+#include <power/SleepLock.h>
 #include <streams/Writable.h>
 
 using hw::Usart;
@@ -15,7 +16,7 @@ class SerialWritable : public Writable {
 protected:
   Usart &uart_;
   RingBufferBase<uint8_t> &txBuffer;
-  bool txLockHeld_{false};
+  std::optional<power::SleepLock> txSleepLock_;
 
   std::expected<void, Error> flush(size_t count);
 
