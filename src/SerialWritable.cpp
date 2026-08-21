@@ -7,14 +7,13 @@ SerialWritable::SerialWritable(Usart &uart, RingBufferBase<uint8_t> &tx)
     : uart_(uart), txBuffer(tx) {}
 
 SerialWritable::~SerialWritable() {
-  if (txLockHeld_) {
-    power::PowerManager::instance().release(power::SleepMode::Sleep);
-    txLockHeld_ = false;
-  }
+  uart_.disableTxEmptyInterrupt();
+  uart_.disableTxCompleteInterrupt();
 }
 
 std::expected<void, Writable::Error> SerialWritable::flush(size_t count) {
   uart_.disableTxEmptyInterrupt();
+  uart_.disableTxCompleteInterrupt();
   utils::Timeout timeout(5000);
   size_t toFlush = std::min(count, txBuffer.size());
   uint8_t c;
@@ -28,14 +27,19 @@ std::expected<void, Writable::Error> SerialWritable::flush(size_t count) {
     return std::unexpected(CouldNotWrite);
   }
   if (!txBuffer.empty()) {
-    if (!txLockHeld_) {
-      power::PowerManager::instance().acquire(power::SleepMode::Sleep);
-      txLockHeld_ = true;
+    if (!txSleepLock_) {
+      txSleepLock_.emplace(power::SleepMode::Sleep);
     }
     uart_.enableTxEmptyInterrupt();
-  } else if (txLockHeld_) {
-    power::PowerManager::instance().release(power::SleepMode::Sleep);
-    txLockHeld_ = false;
+  } else {
+    // txBuffer is empty, but data may still be transmitting in TDR / shift register
+    if (txSleepLock_ || !uart_.isTransferComplete()) {
+      if (!txSleepLock_) {
+        txSleepLock_.emplace(power::SleepMode::Sleep);
+      }
+      uart_.clearTxCompleteFlag();
+      uart_.enableTxCompleteInterrupt();
+    }
   }
   return {};
 }
@@ -59,10 +63,10 @@ SerialWritable::write(std::span<const uint8_t> data) {
     }
   }
   if (!txBuffer.empty()) {
-    if (!txLockHeld_) {
-      power::PowerManager::instance().acquire(power::SleepMode::Sleep);
-      txLockHeld_ = true;
+    if (!txSleepLock_) {
+      txSleepLock_.emplace(power::SleepMode::Sleep);
     }
+    uart_.disableTxCompleteInterrupt();
     uart_.enableTxEmptyInterrupt();
   }
   return data.size();
@@ -75,12 +79,22 @@ void SerialWritable::handleTxInterrupt() {
       uart_.setData(c);
     }
     if (txBuffer.empty()) {
-      // Disable transmit buffer empty interrupt
+      // Software ring buffer is drained. Disable TXE and enable TC interrupt
+      // so the sleep lock is held until the last byte(s) completely leave
+      // the hardware TDR and shift register on the TX line.
       uart_.disableTxEmptyInterrupt();
-      if (txLockHeld_) {
-        power::PowerManager::instance().release(power::SleepMode::Sleep);
-        txLockHeld_ = false;
-      }
+      uart_.clearTxCompleteFlag();
+      uart_.enableTxCompleteInterrupt();
+    }
+  }
+
+  if (uart_.isTransferComplete() && uart_.isTxCompleteInterruptEnabled()) {
+    uart_.disableTxCompleteInterrupt();
+    uart_.clearTxCompleteFlag();
+    if (txBuffer.empty()) {
+      txSleepLock_.reset();
+    } else {
+      uart_.enableTxEmptyInterrupt();
     }
   }
 }

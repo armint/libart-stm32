@@ -18,7 +18,7 @@ std::expected<size_t, Writable::Error> BlockingSerialWritable::write(std::span<c
 }
 
 std::expected<void, Writable::Error> BlockingSerialWritable::flush() {
-   while(!uart_.isTxRegisterEmpty()) {
+   while(!uart_.isTxRegisterEmpty() || !uart_.isTransferComplete()) {
    }
    return {};
 }
