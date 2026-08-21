@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <utils/Timeout.h>
 
+static constexpr uint32_t TX_TIMEOUT_SPINS = 100'000u;
+
 SerialWritable::SerialWritable(Usart &uart, RingBufferBase<uint8_t> &tx)
     : uart_(uart), txBuffer(tx) {}
 
@@ -17,13 +19,24 @@ std::expected<void, Writable::Error> SerialWritable::flush(size_t count) {
   utils::Timeout timeout(5000);
   size_t toFlush = std::min(count, txBuffer.size());
   uint8_t c;
+  bool timedOut = false;
   while (!txBuffer.empty() && !timeout.hasExpired() && toFlush > 0) {
-    if (uart_.isTxRegisterEmpty() && txBuffer.try_pop(c)) {
+    uint32_t spins = 0;
+    while (!uart_.isTxRegisterEmpty()) {
+      if (timeout.hasExpired() || ++spins >= TX_TIMEOUT_SPINS) {
+        timedOut = true;
+        break;
+      }
+    }
+    if (timedOut) {
+      break;
+    }
+    if (txBuffer.try_pop(c)) {
       uart_.setData(c);
       toFlush--;
     }
   }
-  if (timeout.hasExpired()) {
+  if (timedOut || timeout.hasExpired()) {
     return std::unexpected(CouldNotWrite);
   }
   if (!txBuffer.empty()) {
