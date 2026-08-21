@@ -1,5 +1,7 @@
 #include "TicklessIdleHook.h"
 #include <cmsis_device.h>
+#include <peripherals/Pwr.h>
+#include <peripherals/SysTick.h>
 
 namespace power {
 
@@ -54,13 +56,11 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
   const uint64_t tsBefore = rtc_.getSubSecondTimestamp();
 
   // 3. Suspend SysTick
-  SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;
+  hw::SysTick::disable();
 
   // 4. Configure Cortex-M deep sleep and PWR Stop 2 mode
-  SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
-#if defined(PWR_CR1_LPMS)
-  PWR->CR1 = (PWR->CR1 & ~PWR_CR1_LPMS) | PWR_CR1_LPMS_1; // Stop 2
-#endif
+  hw::Pwr::enableDeepSleep();
+  hw::Pwr::setStopMode(hw::Pwr::StopMode::Stop2);
 
   // 5. Enter Stop 2
   __DSB();
@@ -68,7 +68,7 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
   __ISB();
 
   // 6. Wakeup path: Clear SLEEPDEEP
-  SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
+  hw::Pwr::disableDeepSleep();
 
   // 7. Restore high-speed system clocks immediately
   if (restoreClockCallback_) {
@@ -90,8 +90,8 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
   }
 
   // 11. Resume SysTick
-  SysTick->VAL = 0u;
-  SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk;
+  hw::SysTick::reset();
+  hw::SysTick::enable();
 
   // 12. Trigger scheduler reschedule
   os::rtos::port::scheduler::reschedule();
