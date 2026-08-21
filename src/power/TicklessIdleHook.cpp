@@ -56,7 +56,7 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
   const uint64_t tsBefore = rtc_.getSubSecondTimestamp();
 
   // 3. Suspend SysTick
-  hw::SysTick::disable();
+  hw::SysTickTimer::disable();
 
   // 4. Configure Cortex-M deep sleep and PWR Stop 2 mode
   hw::Pwr::enableDeepSleep();
@@ -90,8 +90,8 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
   }
 
   // 11. Resume SysTick
-  hw::SysTick::reset();
-  hw::SysTick::enable();
+  hw::SysTickTimer::reset();
+  hw::SysTickTimer::enable();
 
   // 12. Trigger scheduler reschedule
   os::rtos::port::scheduler::reschedule();
