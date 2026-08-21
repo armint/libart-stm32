@@ -81,6 +81,8 @@ void SerialReadable::handleRxInterrupt() {
 }
 
 void SerialReadable::clear() {
+   bool wasEnabled = uart_.isRxNotEmptyInterruptEnabled();
+   uart_.disableRxNotEmptyInterrupt();
    rxBuffer.clear();
    if(messageEndDetectionEnabled()) {
       messageEndPositions_->clear();
@@ -89,4 +91,7 @@ void SerialReadable::clear() {
       breakPositions_->clear();
    }
    readPos_ = writePos_;
+   if(wasEnabled) {
+      uart_.enableRxNotEmptyInterrupt();
+   }
 }
