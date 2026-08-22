@@ -16,7 +16,8 @@ enum class I2cError : uint8_t {
  * Blocking I2C master built on top of hw::I2c.
  *
  * All transfers spin-poll with a timeout counter. For measurement delays
- * (e.g. 85 ms for SHT21) use os::rtos::sysclock.sleep_for() in the caller.
+ * (e.g. 85 ms for SHT21) use your RTOS's or the application's sleep primitive
+ * in the caller.
  */
 static constexpr uint32_t I2C_TIMEOUT_TICKS = 100'000u;
 
