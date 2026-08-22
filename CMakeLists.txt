@@ -19,10 +19,6 @@ file(GLOB_RECURSE PROJECT_HEADERS
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
 )
 
-if (NOT TARGET micro-os-plus::iii)
-    list(REMOVE_ITEM PROJECT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/power/TicklessIdleHook.cpp")
-endif ()
-
 add_library(art-stm32 STATIC ${PROJECT_SOURCES})
 add_library(art::stm32 ALIAS art-stm32)
 
@@ -44,13 +40,6 @@ target_link_libraries(art-stm32
             art::core
             system-stm32
 )
-
-if (TARGET micro-os-plus::iii)
-    target_link_libraries(art-stm32 PUBLIC micro-os-plus::iii)
-endif ()
-if (TARGET micro-os-plus::architecture-cortexm)
-    target_link_libraries(art-stm32 PUBLIC micro-os-plus::architecture-cortexm)
-endif ()
 
 # If a central build configuration target exists in the superproject,
 # link it so this library is built with the same flags/defines.
