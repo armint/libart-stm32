@@ -2,7 +2,6 @@
 
 #include "SleepMode.h"
 #include <array>
-#include <cmsis-plus/rtos/os.h>
 #include <cstddef>
 #include <cstdint>
 

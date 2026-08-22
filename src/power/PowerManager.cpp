@@ -1,5 +1,5 @@
 #include "PowerManager.h"
-#include <cmsis-plus/rtos/os.h>
+#include <utils/Interrupt.h>
 
 namespace power {
 
@@ -19,7 +19,7 @@ void PowerManager::acquire(SleepMode maxAllowedMode) {
   if (maxAllowedMode >= SleepMode::Stop2) {
     return;
   }
-  os::rtos::interrupts::critical_section cs;
+  Interrupt::CriticalSection cs;
   ++lockCounts_[static_cast<size_t>(maxAllowedMode)];
 }
 
@@ -27,7 +27,7 @@ void PowerManager::release(SleepMode maxAllowedMode) {
   if (maxAllowedMode >= SleepMode::Stop2) {
     return;
   }
-  os::rtos::interrupts::critical_section cs;
+  Interrupt::CriticalSection cs;
   auto &count = lockCounts_[static_cast<size_t>(maxAllowedMode)];
   if (count > 0u) {
     --count;
@@ -35,7 +35,7 @@ void PowerManager::release(SleepMode maxAllowedMode) {
 }
 
 SleepMode PowerManager::deepestAllowedMode() const {
-  os::rtos::interrupts::critical_section cs;
+  Interrupt::CriticalSection cs;
   if (lockCounts_[static_cast<size_t>(SleepMode::Run)] > 0u) {
     return SleepMode::Run;
   }
@@ -49,7 +49,7 @@ SleepMode PowerManager::deepestAllowedMode() const {
 }
 
 void PowerManager::reset() {
-  os::rtos::interrupts::critical_section cs;
+  Interrupt::CriticalSection cs;
   lockCounts_.fill(0u);
 }
 
@@ -57,7 +57,7 @@ uint32_t PowerManager::getLockCount(SleepMode mode) const {
   if (mode >= SleepMode::Stop2) {
     return 0u;
   }
-  os::rtos::interrupts::critical_section cs;
+  Interrupt::CriticalSection cs;
   return lockCounts_[static_cast<size_t>(mode)];
 }
 
