@@ -11,13 +11,18 @@ workflow:
     - if: "$CI_COMMIT_BRANCH"
 
 # Runs the host-native unit tests under tests/ (doctest). These cover the
-# hardware-independent logic (currently power::PowerManager), without needing
-# a cross toolchain or the rest of the embedded dependency graph.
+# hardware-independent logic (currently power::PowerManager) against stub
+# cmsis-plus headers, without needing a cross toolchain or the rest of the
+# embedded dependency graph (system-stm32, micro-os-plus).
 #
-# This repo's embedded sources (art-stm32 proper) statically link
-# system-stm32 and are RTOS-agnostic. Building the full embedded target is
-# exercised by downstream projects (such as sentinode-ht), which build this
-# repo as a submodule.
+# This repo's other sources (art-stm32 proper) statically link
+# system-stm32 and, for src/power/*, directly include cmsis-plus/rtos
+# headers from micro-os-plus -- there is no released/tagged version of
+# either to pin a standalone cross-compiled matrix build against (unlike
+# system-stm32, which now has its own family matrix). Building the full
+# embedded target is exercised today by sentinode-ht's own CI, which
+# builds this repo as a submodule. Revisit adding a cross-compiled job
+# here once system-stm32/micro-os-plus have real version tags to pin to.
 unit-tests:
   stage: test
   variables:
