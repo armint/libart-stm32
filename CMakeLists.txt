@@ -19,6 +19,10 @@ file(GLOB_RECURSE PROJECT_HEADERS
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
 )
 
+if (NOT TARGET micro-os-plus::iii)
+    list(REMOVE_ITEM PROJECT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/power/TicklessIdleHook.cpp")
+endif ()
+
 add_library(art-stm32 STATIC ${PROJECT_SOURCES})
 add_library(art::stm32 ALIAS art-stm32)
 
