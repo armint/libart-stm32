@@ -3,6 +3,12 @@
 #include <algorithm>
 #include <utils/Timeout.h>
 
+// Coarse CPU-cycle ceiling for polling TXE on a single byte. This is the only
+// bound available before SysTick starts, so it can't be derived from the
+// wall-clock timeout below; it must comfortably outlast one byte's TXE-wait
+// time (~1 baud period) for the consumer's baud rate and core clock. Not
+// scaled to either, so consumers running very low baud rates and/or high
+// core clocks should confirm the margin still holds for their config.
 static constexpr uint32_t TX_TIMEOUT_SPINS = 100'000u;
 
 SerialWritable::SerialWritable(Usart &uart, RingBufferBase<uint8_t> &tx)
@@ -23,7 +29,8 @@ std::expected<void, Writable::Error> SerialWritable::flush(size_t count) {
   while (!txBuffer.empty() && !timeout.hasExpired() && toFlush > 0) {
     uint32_t spins = 0;
     while (!uart_.isTxRegisterEmpty()) {
-      if (timeout.hasExpired() || ++spins >= TX_TIMEOUT_SPINS) {
+      if (++spins >= TX_TIMEOUT_SPINS ||
+          ((spins & 0xFFu) == 0 && timeout.hasExpired())) {
         timedOut = true;
         break;
       }
@@ -37,6 +44,7 @@ std::expected<void, Writable::Error> SerialWritable::flush(size_t count) {
     }
   }
   if (timedOut || timeout.hasExpired()) {
+    txSleepLock_.reset();
     return std::unexpected(CouldNotWrite);
   }
   if (!txBuffer.empty()) {
