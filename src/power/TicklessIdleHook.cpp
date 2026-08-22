@@ -5,38 +5,18 @@
 
 namespace power {
 
-uint32_t TicklessIdleHook::computeTimeToNextDeadlineMs() {
-  os::rtos::interrupts::critical_section cs;
-  const auto *head = os::rtos::sysclock.steady_list().head();
-  if (head == nullptr) {
-    return UINT32_MAX;
-  }
-
-  const auto now = os::rtos::sysclock.now();
-  const auto deadline = head->timestamp;
-
-  if (deadline <= now) {
-    return 0u;
-  }
-
-  const auto diffTicks = deadline - now;
-  constexpr uint32_t freqHz = os::rtos::clock_systick::frequency_hz;
-  if constexpr (freqHz == 1000u) {
-    return (diffTicks > UINT32_MAX) ? UINT32_MAX
-                                    : static_cast<uint32_t>(diffTicks);
-  } else {
-    const uint64_t ms = (static_cast<uint64_t>(diffTicks) * 1000u) / freqHz;
-    return (ms > UINT32_MAX) ? UINT32_MAX : static_cast<uint32_t>(ms);
-  }
-}
-
 void TicklessIdleHook::enterSleep() {
+  const uint32_t primask = __get_PRIMASK();
+  __disable_irq();
   __DSB();
   __WFI();
   __ISB();
+  __set_PRIMASK(primask);
 }
 
 void TicklessIdleHook::enterLPRun() {
+  const uint32_t primask = __get_PRIMASK();
+  __disable_irq();
   if (enterLPRunCallback_) {
     enterLPRunCallback_();
   }
@@ -46,11 +26,27 @@ void TicklessIdleHook::enterLPRun() {
   if (restoreClockCallback_) {
     restoreClockCallback_();
   }
+  __set_PRIMASK(primask);
 }
 
 void TicklessIdleHook::enterStop2(uint32_t durationMs) {
-  // 1. Arm RTC Wakeup Timer
-  rtc_.armWakeup(durationMs);
+  // Mask interrupts around sleep configuration and WFI to prevent preemption
+  // and race conditions where an ISR readies a task between arming WUT and __WFI().
+  // On ARMv7-M, __WFI() still wakes up when an enabled interrupt becomes pending.
+  const uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+
+  // 1. Arm RTC Wakeup Timer (clamped to avoid 32-bit overflow in (durationMs + 999u))
+  constexpr uint32_t kMaxWakeupDurationMs = UINT32_MAX - 999u;
+  const uint32_t clampedDurationMs =
+      (durationMs > kMaxWakeupDurationMs) ? kMaxWakeupDurationMs : durationMs;
+  if (!rtc_.armWakeup(clampedDurationMs)) {
+    // If WUTWF poll timed out, fall back to shallow sleep rather than sleeping
+    // indefinitely without a timed wakeup source.
+    __set_PRIMASK(primask);
+    enterSleep();
+    return;
+  }
 
   // 2. Read timestamp immediately prior to entering Stop 2
   const uint64_t tsBefore = rtc_.getSubSecondTimestamp();
@@ -83,49 +79,58 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
   // 9. Disarm Wakeup Timer
   rtc_.disarmWakeup();
 
-  // 10. Update RTOS steady clock for the slept duration
-  if (elapsedMs > 0u) {
-    os::rtos::sysclock.update_for_slept_time(
-        static_cast<os::rtos::port::clock::duration_t>(elapsedMs));
-  }
-
-  // 11. Resume SysTick
+  // 10. Resume SysTick before tick compensation and potential context switch
   hw::SysTickTimer::reset();
   hw::SysTickTimer::enable();
 
-  // 12. Trigger scheduler reschedule
-  os::rtos::port::scheduler::reschedule();
+  // 11. Compensate RTOS tick for the slept duration and trigger reschedule
+  // Invoked unconditionally (even if elapsedMs == 0 across midnight wrap or sub-ms)
+  // so any thread unblocked by the waking ISR is immediately rescheduled.
+  if (tickCompensationCallback_) {
+    tickCompensationCallback_(static_cast<uint32_t>(elapsedMs));
+  }
+
+  // 12. Restore interrupt state. Pending interrupts will fire immediately.
+  __set_PRIMASK(primask);
 }
 
-bool TicklessIdleHook::handleIdle() {
+bool TicklessIdleHook::handleIdle(uint32_t expectedIdleMs) {
+  const uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+
   const SleepMode mode = PowerManager::instance().deepestAllowedMode();
 
   switch (mode) {
   case SleepMode::Run:
     // No sleep allowed, yield execution
+    __set_PRIMASK(primask);
     return true;
 
   case SleepMode::Sleep:
     enterSleep();
+    __set_PRIMASK(primask);
     return true;
 
   case SleepMode::LPRun:
     enterLPRun();
+    __set_PRIMASK(primask);
     return true;
 
   case SleepMode::Stop2: {
-    const uint32_t deadlineMs = computeTimeToNextDeadlineMs();
-    if (deadlineMs <= minStop2DurationMs_) {
+    if (expectedIdleMs <= minStop2DurationMs_) {
       // Fast shallow sleep if deadline is within minimum overhead threshold
       enterSleep();
+      __set_PRIMASK(primask);
       return true;
     }
 
-    enterStop2(deadlineMs);
+    enterStop2(expectedIdleMs);
+    __set_PRIMASK(primask);
     return true;
   }
   }
 
+  __set_PRIMASK(primask);
   return true;
 }
 
