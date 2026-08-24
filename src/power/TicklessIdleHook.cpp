@@ -36,6 +36,15 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
   const uint32_t primask = __get_PRIMASK();
   __disable_irq();
 
+  // Local shorthand for the optional trace callback.
+  const auto trace = [this](char c) {
+    if (traceCallback_) {
+      traceCallback_(c);
+    }
+  };
+
+  trace('>');
+
   // 1. Arm RTC Wakeup Timer (clamped to avoid 32-bit overflow in (durationMs + 999u))
   constexpr uint32_t kMaxWakeupDurationMs = UINT32_MAX - 999u;
   const uint32_t clampedDurationMs =
@@ -43,38 +52,57 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
   if (!rtc_.armWakeup(clampedDurationMs)) {
     // If WUTWF poll timed out, fall back to shallow sleep rather than sleeping
     // indefinitely without a timed wakeup source.
+    trace('!');
     __set_PRIMASK(primask);
     enterSleep();
     return;
   }
 
+  trace('A');
+
   // 2. Read timestamp immediately prior to entering Stop 2
   const uint64_t tsBefore = rtc_.getSubSecondTimestamp();
+
+  trace('T');
 
   // 3. Suspend SysTick
   hw::SysTickTimer::disable();
 
+  trace('S');
+
   // 4. Configure Cortex-M deep sleep and PWR Stop 2 mode
   hw::Pwr::enableDeepSleep();
   hw::Pwr::setStopMode(hw::Pwr::StopMode::Stop2);
+
+  trace('W');
 
   // 5. Enter Stop 2
   __DSB();
   __WFI();
   __ISB();
 
+  // --- Wakeup path (now running on MSI ~4 MHz) ---
+
+  trace('w');
+
   // 6. Wakeup path: Clear SLEEPDEEP
   hw::Pwr::disableDeepSleep();
+
+  trace('C');
 
   // 7. Restore high-speed system clocks immediately
   if (restoreClockCallback_) {
     restoreClockCallback_();
   }
 
+  trace('c');
+
   // 8. Measure elapsed time across sleep (works for RTC WUT, Radio DIO1, or any
   // EXTI)
   const uint64_t tsAfter = rtc_.getSubSecondTimestamp();
   const uint64_t elapsedMs = (tsAfter >= tsBefore) ? (tsAfter - tsBefore) : 0u;
+
+  trace('U');
 
   // 9. Disarm Wakeup Timer
   rtc_.disarmWakeup();
@@ -83,12 +111,16 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
   hw::SysTickTimer::reset();
   hw::SysTickTimer::enable();
 
+  trace('K');
+
   // 11. Compensate RTOS tick for the slept duration and trigger reschedule
   // Invoked unconditionally (even if elapsedMs == 0 across midnight wrap or sub-ms)
   // so any thread unblocked by the waking ISR is immediately rescheduled.
   if (tickCompensationCallback_) {
     tickCompensationCallback_(static_cast<uint32_t>(elapsedMs));
   }
+
+  trace('\n');
 
   // 12. Restore interrupt state. Pending interrupts will fire immediately.
   __set_PRIMASK(primask);

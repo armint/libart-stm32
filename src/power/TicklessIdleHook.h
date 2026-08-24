@@ -31,6 +31,15 @@ public:
    */
   using TickCompensationCallback = void (*)(uint32_t elapsedMs);
 
+  /**
+   * @brief Optional trace callback for Stop2 debug instrumentation.
+   *
+   * Called at each stage of enterStop2() with a single-character breadcrumb.
+   * When output stops, the last character identifies the hang point.
+   * Set via setTraceCallback(); nullptr (default) disables tracing.
+   */
+  using TraceCallback = void (*)(char stage);
+
   explicit TicklessIdleHook(
       hw::Rtc &rtc, ClockRestoreCallback restoreClockCb = nullptr,
       uint32_t minStop2DurationMs = 3u,
@@ -69,11 +78,14 @@ public:
     tickCompensationCallback_ = cb;
   }
 
+  void setTraceCallback(TraceCallback cb) { traceCallback_ = cb; }
+
 private:
   hw::Rtc &rtc_;
   ClockRestoreCallback restoreClockCallback_{nullptr};
   LPRunEnterCallback enterLPRunCallback_{nullptr};
   TickCompensationCallback tickCompensationCallback_{nullptr};
+  TraceCallback traceCallback_{nullptr};
   uint32_t minStop2DurationMs_{3u};
 
   void enterSleep();
