@@ -1,6 +1,7 @@
 #include "SerialWritable.h"
 
 #include <algorithm>
+#include <utils/Interrupt.h>
 #include <utils/Timeout.h>
 
 // Coarse CPU-cycle ceiling for polling TXE on a single byte. This is the only
@@ -20,8 +21,11 @@ SerialWritable::~SerialWritable() {
 }
 
 std::expected<void, Writable::Error> SerialWritable::flush(size_t count) {
-  uart_.disableTxEmptyInterrupt();
-  uart_.disableTxCompleteInterrupt();
+  {
+    Interrupt::CriticalSection cs;
+    uart_.disableTxEmptyInterrupt();
+    uart_.disableTxCompleteInterrupt();
+  }
   utils::Timeout timeout(5000);
   size_t toFlush = std::min(count, txBuffer.size());
   uint8_t c;
@@ -48,16 +52,22 @@ std::expected<void, Writable::Error> SerialWritable::flush(size_t count) {
     return std::unexpected(CouldNotWrite);
   }
   if (!txBuffer.empty()) {
+    Interrupt::CriticalSection cs;
     if (!txSleepLock_) {
       txSleepLock_.emplace(power::SleepMode::Sleep);
     }
     uart_.enableTxEmptyInterrupt();
   } else {
-    // txBuffer is empty, but data may still be transmitting in TDR / shift register
-    if (txSleepLock_ || !uart_.isTransferComplete()) {
-      if (!txSleepLock_) {
-        txSleepLock_.emplace(power::SleepMode::Sleep);
-      }
+    // txBuffer is empty, but data may still be transmitting in TDR / shift
+    // register.
+    Interrupt::CriticalSection cs;
+    if (uart_.isTransferComplete()) {
+      // The last byte already finished shifting out (e.g. between the poll
+      // loop above and this check) -- release now rather than arming TC and
+      // waiting for an edge that will never occur again, since nothing else
+      // is queued to transmit.
+      txSleepLock_.reset();
+    } else if (txSleepLock_) {
       uart_.clearTxCompleteFlag();
       uart_.enableTxCompleteInterrupt();
     }
@@ -84,6 +94,7 @@ SerialWritable::write(std::span<const uint8_t> data) {
     }
   }
   if (!txBuffer.empty()) {
+    Interrupt::CriticalSection cs;
     if (!txSleepLock_) {
       txSleepLock_.emplace(power::SleepMode::Sleep);
     }
