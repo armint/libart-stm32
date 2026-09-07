@@ -1,5 +1,6 @@
 #include "TicklessIdleHook.h"
 #include <cmsis_device.h>
+#include <optional>
 #include <peripherals/Pwr.h>
 #include <peripherals/SysTick.h>
 #include <utils/Interrupt.h>
@@ -35,8 +36,10 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
   // Mask interrupts around sleep configuration and WFI to prevent preemption
   // and race conditions where an ISR readies a task between arming WUT and __WFI().
   // On ARMv7-M, __WFI() still wakes up when an enabled interrupt becomes pending.
-  const uint32_t primask = __get_PRIMASK();
-  __disable_irq();
+  // Held in an optional (rather than a plain guard) so the WUTWF-timeout
+  // fallback below can unmask early, before falling back to enterSleep() --
+  // see the comment there.
+  std::optional<Interrupt::CriticalSection> cs{std::in_place};
 
   // Local shorthand for the optional trace callback.
   const auto trace = [this](char c) {
@@ -53,9 +56,12 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
       (durationMs > kMaxWakeupDurationMs) ? kMaxWakeupDurationMs : durationMs;
   if (!rtc_.armWakeup(clampedDurationMs)) {
     // If WUTWF poll timed out, fall back to shallow sleep rather than sleeping
-    // indefinitely without a timed wakeup source.
+    // indefinitely without a timed wakeup source. Unmask here (rather than
+    // leaving cs to unwind at the end of the function) so enterSleep() runs
+    // its own independent mask/unmask cycle instead of nesting inside this
+    // one.
     trace('!');
-    __set_PRIMASK(primask);
+    cs.reset();
     enterSleep();
     return;
   }
@@ -124,8 +130,8 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
 
   trace('\n');
 
-  // 12. Restore interrupt state. Pending interrupts will fire immediately.
-  __set_PRIMASK(primask);
+  // 12. Restore interrupt state. Pending interrupts will fire immediately,
+  // via cs unwinding at function exit.
 }
 
 bool TicklessIdleHook::handleIdle(uint32_t expectedIdleMs) {
