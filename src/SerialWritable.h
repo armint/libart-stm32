@@ -32,6 +32,17 @@ protected:
     return txSync_ != nullptr && txSync_->canBlock();
   }
 
+  // Whether the caller (write()/flush()/beginWriteSession()) should take
+  // txSync_'s lock itself right now: blocking must be allowed, and the
+  // current task must not already hold it via an enclosing WriteSession (see
+  // SerialTxSync::heldByCaller()). Re-evaluated independently on every call;
+  // that is only safe for the same-task question it answers -- see the note
+  // on sessionDepth_/selfLocked_ below for the one path that mutates state
+  // without it.
+  [[nodiscard]] bool shouldSelfLock() const {
+    return canBlock() && !txSync_->heldByCaller();
+  }
+
   std::expected<void, Error> flushUnlocked(size_t count, bool blocking);
   std::expected<void, Error> flushPolled(size_t count);
   std::expected<void, Error> flushInterruptDriven(size_t count);
@@ -39,17 +50,19 @@ protected:
                                              bool blocking);
   void releaseOrArmTransferComplete();
 
-  // Take/release txSync_'s lock for a whole WriteSession instead of once per
-  // write()/flush() call -- see beginWriteSession()/endWriteSession() below.
-  // Each independently re-evaluates canBlock(), so a session's begin and its
-  // matching end must observe the same answer; that holds as long as nothing
-  // between them changes whether blocking is currently allowed (ISRs never
-  // log here, and nothing on the logging path masks interrupts or suspends
-  // the scheduler across a session's whole lifetime, only briefly inside
-  // flush()'s own critical sections, which complete before the session
-  // closes). Nesting itself is not tracked here: it is txSync_->lock()'s job
-  // to tolerate the same task re-entering (see the warning on
-  // SerialTxSync::lock()).
+  // How deep the current chain of nested WriteSessions is, and whether/where
+  // one of them actually took the real lock -- see beginWriteSession()/
+  // endWriteSession() below. Because heldByCaller() reports true for every
+  // level once the outermost one has locked, at most one level in a chain
+  // ever actually locks; selfLockedAtDepth_ records which, so only that
+  // level's matching end() releases it. Both are mutated unconditionally,
+  // including when canBlock() is false, which is safe only because ISRs
+  // never open a WriteSession on the same sink (project convention) -- an
+  // ISR doing so here would race the task it interrupted.
+  uint8_t sessionDepth_{0};
+  bool selfLocked_{false};
+  uint8_t selfLockedAtDepth_{0};
+
   void beginWriteSession() noexcept override;
   void endWriteSession() noexcept override;
 
@@ -70,18 +83,6 @@ public:
                  SerialTxSync *txSync = nullptr, size_t txLowWater = 0);
   ~SerialWritable() override;
 
-  /**
-   * @note write()/flush() no longer take txSync_'s lock themselves -- locking
-   * now happens once per WriteSession, in beginWriteSession()/
-   * endWriteSession() (see below), instead of once per call. Both are called
-   * unconditionally on every path today (Writable::vprintf() and
-   * logging::Logger::vlog() always open one), so this is transparent there.
-   * A caller that invokes write()/flush() directly, outside any writeSession()
-   * -- e.g. a raw, unformatted write -- is therefore no longer serialised
-   * against a concurrent writer on the same sink by this class; wrap such a
-   * call in writeSession() if txSync_ is set and concurrent access is
-   * possible.
-   */
   std::expected<size_t, Error> write(std::span<const uint8_t> data) override;
   std::expected<void, Error> flush() override;
 

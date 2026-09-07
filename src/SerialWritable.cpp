@@ -1,6 +1,7 @@
 #include "SerialWritable.h"
 
 #include <algorithm>
+#include <mutex>
 #include <utils/Interrupt.h>
 #include <utils/Timeout.h>
 
@@ -160,18 +161,29 @@ SerialWritable::flushUnlocked(size_t count, bool blocking) {
 }
 
 void SerialWritable::beginWriteSession() noexcept {
-  if (canBlock()) {
+  if (!selfLocked_ && shouldSelfLock()) {
     txSync_->lock();
+    selfLocked_ = true;
+    selfLockedAtDepth_ = sessionDepth_;
   }
+  ++sessionDepth_;
 }
 
 void SerialWritable::endWriteSession() noexcept {
-  if (canBlock()) {
+  if (sessionDepth_ > 0) {
+    --sessionDepth_;
+  }
+  if (selfLocked_ && sessionDepth_ == selfLockedAtDepth_) {
     txSync_->unlock();
+    selfLocked_ = false;
   }
 }
 
 std::expected<void, Writable::Error> SerialWritable::flush() {
+  std::optional<std::lock_guard<SerialTxSync>> guard;
+  if (shouldSelfLock()) {
+    guard.emplace(*txSync_);
+  }
   return flushUnlocked(txBuffer.size(), canBlock());
 }
 
@@ -202,6 +214,10 @@ SerialWritable::writeUnlocked(std::span<const uint8_t> data, bool blocking) {
 
 std::expected<size_t, Writable::Error>
 SerialWritable::write(std::span<const uint8_t> data) {
+  std::optional<std::lock_guard<SerialTxSync>> guard;
+  if (shouldSelfLock()) {
+    guard.emplace(*txSync_);
+  }
   return writeUnlocked(data, canBlock());
 }
 
