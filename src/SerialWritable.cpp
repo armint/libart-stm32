@@ -1,6 +1,7 @@
 #include "SerialWritable.h"
 
 #include <algorithm>
+#include <mutex>
 #include <utils/Interrupt.h>
 #include <utils/Timeout.h>
 
@@ -172,6 +173,10 @@ void SerialWritable::endWriteSession() noexcept {
 }
 
 std::expected<void, Writable::Error> SerialWritable::flush() {
+  std::optional<std::lock_guard<SerialTxSync>> guard;
+  if (shouldSelfLock()) {
+    guard.emplace(*txSync_);
+  }
   return flushUnlocked(txBuffer.size(), canBlock());
 }
 
@@ -202,6 +207,10 @@ SerialWritable::writeUnlocked(std::span<const uint8_t> data, bool blocking) {
 
 std::expected<size_t, Writable::Error>
 SerialWritable::write(std::span<const uint8_t> data) {
+  std::optional<std::lock_guard<SerialTxSync>> guard;
+  if (shouldSelfLock()) {
+    guard.emplace(*txSync_);
+  }
   return writeUnlocked(data, canBlock());
 }
 

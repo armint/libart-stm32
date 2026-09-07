@@ -32,6 +32,32 @@ protected:
     return txSync_ != nullptr && txSync_->canBlock();
   }
 
+  // Whether write()/flush() should take txSync_'s lock themselves right now:
+  // blocking must be allowed, and the current task must not already hold it
+  // via an enclosing WriteSession (see SerialTxSync::heldByCaller()).
+  // heldByCaller() is a genuine per-task query (e.g. backed by
+  // xSemaphoreGetMutexHolder() == xTaskGetCurrentTaskHandle()), so this is
+  // safe to evaluate fresh on every write()/flush() call: a call from a
+  // different task correctly sees "not held by me" and locks for real, which
+  // correctly blocks against whichever task actually holds it.
+  //
+  // beginWriteSession()/endWriteSession() below deliberately do NOT use this
+  // check, nor track anything like "is a session already open" themselves --
+  // that would be per-instance state answering a per-task question. A task
+  // can hold a session open across a blocking wait() (see
+  // flushInterruptDriven()), during which a genuinely different task must
+  // still see "not held" and really lock; instance-wide bookkeeping cannot
+  // tell that apart from "the same task re-entering" without also racing on
+  // the bookkeeping itself at the lock/unlock boundary. So every
+  // beginWriteSession()/endWriteSession() call locks/unlocks unconditionally
+  // on canBlock(), same as write()/flush() did before this class opted into
+  // WriteSession: two lock/unlock pairs for a nested Logger-plus-printf line
+  // rather than one, but correct under real cross-task contention, which a
+  // single shared pair is not.
+  [[nodiscard]] bool shouldSelfLock() const {
+    return canBlock() && !txSync_->heldByCaller();
+  }
+
   std::expected<void, Error> flushUnlocked(size_t count, bool blocking);
   std::expected<void, Error> flushPolled(size_t count);
   std::expected<void, Error> flushInterruptDriven(size_t count);
@@ -39,17 +65,6 @@ protected:
                                              bool blocking);
   void releaseOrArmTransferComplete();
 
-  // Take/release txSync_'s lock for a whole WriteSession instead of once per
-  // write()/flush() call -- see beginWriteSession()/endWriteSession() below.
-  // Each independently re-evaluates canBlock(), so a session's begin and its
-  // matching end must observe the same answer; that holds as long as nothing
-  // between them changes whether blocking is currently allowed (ISRs never
-  // log here, and nothing on the logging path masks interrupts or suspends
-  // the scheduler across a session's whole lifetime, only briefly inside
-  // flush()'s own critical sections, which complete before the session
-  // closes). Nesting itself is not tracked here: it is txSync_->lock()'s job
-  // to tolerate the same task re-entering (see the warning on
-  // SerialTxSync::lock()).
   void beginWriteSession() noexcept override;
   void endWriteSession() noexcept override;
 
@@ -70,18 +85,6 @@ public:
                  SerialTxSync *txSync = nullptr, size_t txLowWater = 0);
   ~SerialWritable() override;
 
-  /**
-   * @note write()/flush() no longer take txSync_'s lock themselves -- locking
-   * now happens once per WriteSession, in beginWriteSession()/
-   * endWriteSession() (see below), instead of once per call. Both are called
-   * unconditionally on every path today (Writable::vprintf() and
-   * logging::Logger::vlog() always open one), so this is transparent there.
-   * A caller that invokes write()/flush() directly, outside any writeSession()
-   * -- e.g. a raw, unformatted write -- is therefore no longer serialised
-   * against a concurrent writer on the same sink by this class; wrap such a
-   * call in writeSession() if txSync_ is set and concurrent access is
-   * possible.
-   */
   std::expected<size_t, Error> write(std::span<const uint8_t> data) override;
   std::expected<void, Error> flush() override;
 
