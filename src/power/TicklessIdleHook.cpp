@@ -14,8 +14,7 @@ void TicklessIdleHook::enterSleep() {
 }
 
 void TicklessIdleHook::enterLPRun() {
-  const uint32_t primask = __get_PRIMASK();
-  __disable_irq();
+  Interrupt::CriticalSection cs;
   // Only restore the clock if something actually lowered it. With no LPRun
   // enter callback configured this is a plain WFI that never touches the
   // clock, so invoking the restore callback would re-run a full clock
@@ -30,7 +29,6 @@ void TicklessIdleHook::enterLPRun() {
   if (loweredClock && restoreClockCallback_) {
     restoreClockCallback_();
   }
-  __set_PRIMASK(primask);
 }
 
 void TicklessIdleHook::enterStop2(uint32_t durationMs) {
