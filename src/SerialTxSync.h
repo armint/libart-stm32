@@ -43,6 +43,16 @@ public:
    *
    * With unlock() this satisfies BasicLockable, so the driver guards itself
    * with std::lock_guard<SerialTxSync>.
+   *
+   * @warning Must tolerate the calling task taking it more than once before a
+   * matching number of unlock() calls. SerialWritable's write session hooks
+   * (beginWriteSession()/endWriteSession(), see streams/Writable.h's
+   * WriteSession) nest: logging::Logger holds an outer session across a whole
+   * log line while each printf() call within it opens its own inner one on
+   * the same task. A plain non-recursive mutex self-deadlocks the first time
+   * a line is logged, silently -- configASSERT is compiled out in release
+   * builds, so nothing traps it. Implement with a recursive primitive, e.g.
+   * art::rtos::RecursiveMutex.
    */
   virtual void lock() = 0;
 
