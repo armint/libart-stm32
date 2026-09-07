@@ -19,11 +19,13 @@ include(CTest)
 
 file(GLOB TEST_SOURCES
     TestPowerManager.cpp
+    TestSerialWritable.cpp
 )
 
 add_executable(art-stm32-tests
     ${TEST_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/../src/power/PowerManager.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/SerialWritable.cpp"
 )
 
 target_include_directories(art-stm32-tests PRIVATE

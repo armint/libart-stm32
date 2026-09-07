@@ -1,6 +1,7 @@
 #include "SerialWritable.h"
 
 #include <algorithm>
+#include <mutex>
 #include <utils/Interrupt.h>
 #include <utils/Timeout.h>
 
@@ -12,21 +13,49 @@
 // core clocks should confirm the margin still holds for their config.
 static constexpr uint32_t TX_TIMEOUT_SPINS = 100'000u;
 
-SerialWritable::SerialWritable(Usart &uart, RingBufferBase<uint8_t> &tx)
-    : uart_(uart), txBuffer(tx) {}
+// Wall-clock ceiling on a single flush(), for both the polled and the
+// interrupt-driven path.
+static constexpr uint32_t FLUSH_TIMEOUT_MS = 5000u;
+
+// A blocked writer re-checks the buffer at least this often. It normally
+// wakes on the ISR notification long before this; the slice only bounds the
+// case where the drain happened without the TX interrupt running -- a write
+// from ISR context or a critical section takes the polled path, which masks
+// TXE/TC while it empties the ring, so the notification never comes.
+static constexpr uint32_t TX_WAIT_SLICE_MS = 50u;
+
+SerialWritable::SerialWritable(Usart &uart, RingBufferBase<uint8_t> &tx,
+                               SerialTxSync *txSync, size_t txLowWater)
+    : uart_(uart), txBuffer(tx), txSync_(txSync), txLowWater_(txLowWater) {}
 
 SerialWritable::~SerialWritable() {
   uart_.disableTxEmptyInterrupt();
   uart_.disableTxCompleteInterrupt();
 }
 
-std::expected<void, Writable::Error> SerialWritable::flush(size_t count) {
+void SerialWritable::releaseOrArmTransferComplete() {
+  // txBuffer is empty, but data may still be transmitting in TDR / shift
+  // register.
+  Interrupt::CriticalSection cs;
+  if (uart_.isTransferComplete()) {
+    // The last byte already finished shifting out (e.g. between draining the
+    // buffer and this check) -- release now rather than arming TC and waiting
+    // for an edge that will never occur again, since nothing else is queued
+    // to transmit.
+    txSleepLock_.reset();
+  } else if (txSleepLock_) {
+    uart_.clearTxCompleteFlag();
+    uart_.enableTxCompleteInterrupt();
+  }
+}
+
+std::expected<void, Writable::Error> SerialWritable::flushPolled(size_t count) {
   {
     Interrupt::CriticalSection cs;
     uart_.disableTxEmptyInterrupt();
     uart_.disableTxCompleteInterrupt();
   }
-  utils::Timeout timeout(5000);
+  utils::Timeout timeout(FLUSH_TIMEOUT_MS);
   size_t toFlush = std::min(count, txBuffer.size());
   uint8_t c;
   bool timedOut = false;
@@ -58,33 +87,93 @@ std::expected<void, Writable::Error> SerialWritable::flush(size_t count) {
     }
     uart_.enableTxEmptyInterrupt();
   } else {
-    // txBuffer is empty, but data may still be transmitting in TDR / shift
-    // register.
-    Interrupt::CriticalSection cs;
-    if (uart_.isTransferComplete()) {
-      // The last byte already finished shifting out (e.g. between the poll
-      // loop above and this check) -- release now rather than arming TC and
-      // waiting for an edge that will never occur again, since nothing else
-      // is queued to transmit.
-      txSleepLock_.reset();
-    } else if (txSleepLock_) {
-      uart_.clearTxCompleteFlag();
-      uart_.enableTxCompleteInterrupt();
-    }
+    releaseOrArmTransferComplete();
   }
   return {};
 }
 
+std::expected<void, Writable::Error>
+SerialWritable::flushInterruptDriven(size_t count) {
+  utils::Timeout timeout(FLUSH_TIMEOUT_MS);
+  const size_t pending = txBuffer.size();
+  const size_t target = (count >= pending) ? 0u : pending - count;
+  // Waking the writer on every transmitted byte would cost a context switch
+  // per byte, so let the ISR wake it once the buffer has drained to the
+  // low-water mark: it then gets a batch of free slots to refill while the
+  // hardware still has txLowWater_ bytes queued, so the TX line does not fall
+  // idle in the meantime. A full flush (target 0) waits for the whole ring.
+  const size_t threshold = std::min(target, txLowWater_);
+
+  while (txBuffer.size() > target) {
+    // Armed outside the critical section below: a notification that arrives
+    // between arming and waiting only causes one extra loop iteration, which
+    // the buffer-level check above absorbs.
+    txSync_->armWait();
+    {
+      Interrupt::CriticalSection cs;
+      if (txBuffer.size() <= target) {
+        break;
+      }
+      txWaitThreshold_ = threshold;
+      txWaitArmed_ = true;
+      if (!txSleepLock_) {
+        txSleepLock_.emplace(power::SleepMode::Sleep);
+      }
+      uart_.disableTxCompleteInterrupt();
+      uart_.enableTxEmptyInterrupt();
+    }
+    txSync_->wait(std::min(static_cast<uint32_t>(timeout.getDurationLeft()),
+                           TX_WAIT_SLICE_MS));
+    // Checked after the wait, so an expired timeout does not cost another
+    // arm-and-wait round with a zero timeout.
+    if (timeout.hasExpired()) {
+      break;
+    }
+  }
+
+  {
+    Interrupt::CriticalSection cs;
+    txWaitArmed_ = false;
+  }
+
+  if (txBuffer.size() > target) {
+    // The transmitter made no progress within the timeout (stopped clock,
+    // stuck line): stop driving it and drop the sleep lock, as the polled
+    // path does.
+    Interrupt::CriticalSection cs;
+    uart_.disableTxEmptyInterrupt();
+    uart_.disableTxCompleteInterrupt();
+    txSleepLock_.reset();
+    return std::unexpected(CouldNotWrite);
+  }
+  if (txBuffer.empty()) {
+    releaseOrArmTransferComplete();
+  }
+  return {};
+}
+
+std::expected<void, Writable::Error>
+SerialWritable::flushUnlocked(size_t count, bool blocking) {
+  if (blocking) {
+    return flushInterruptDriven(count);
+  }
+  return flushPolled(count);
+}
+
 std::expected<void, Writable::Error> SerialWritable::flush() {
-  return flush(txBuffer.size());
+  if (canBlock()) {
+    std::lock_guard<SerialTxSync> guard(*txSync_);
+    return flushUnlocked(txBuffer.size(), true);
+  }
+  return flushUnlocked(txBuffer.size(), false);
 }
 
 std::expected<size_t, Writable::Error>
-SerialWritable::write(std::span<const uint8_t> data) {
+SerialWritable::writeUnlocked(std::span<const uint8_t> data, bool blocking) {
   for (size_t i = 0; i < data.size(); i++) {
     uint8_t c = data[i];
     if (txBuffer.full()) {
-      auto res = flush(1);
+      auto res = flushUnlocked(1, blocking);
       if (!res) {
         return std::unexpected(res.error());
       }
@@ -102,6 +191,15 @@ SerialWritable::write(std::span<const uint8_t> data) {
     uart_.enableTxEmptyInterrupt();
   }
   return data.size();
+}
+
+std::expected<size_t, Writable::Error>
+SerialWritable::write(std::span<const uint8_t> data) {
+  if (canBlock()) {
+    std::lock_guard<SerialTxSync> guard(*txSync_);
+    return writeUnlocked(data, true);
+  }
+  return writeUnlocked(data, false);
 }
 
 void SerialWritable::handleTxInterrupt() {
@@ -128,5 +226,10 @@ void SerialWritable::handleTxInterrupt() {
     } else {
       uart_.enableTxEmptyInterrupt();
     }
+  }
+
+  if (txWaitArmed_ && txBuffer.size() <= txWaitThreshold_) {
+    txWaitArmed_ = false;
+    txSync_->notifyFromIsr();
   }
 }
