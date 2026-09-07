@@ -46,7 +46,18 @@ public:
   int lockCallCount{0};
   int unlockCallCount{0};
 
+  // Models a SerialTxSync implementation that got heldByCaller() wrong --
+  // e.g. one that always returns false instead of actually checking
+  // ownership. Demonstrates that the recursion requirement on lock() is
+  // mandatory regardless of heldByCaller(), not just a fallback for
+  // implementers who skip it.
+  bool alwaysReportNotHeld{false};
+
   [[nodiscard]] bool canBlock() const override { return blockingAllowed; }
+
+  [[nodiscard]] bool heldByCaller() const override {
+    return !alwaysReportNotHeld && lockDepth > 0;
+  }
 
   void lock() override {
     if (!recursive && lockDepth > 0) {
@@ -85,6 +96,16 @@ public:
     notifyCount++;
     token = true;
   }
+};
+
+// beginWriteSession()/endWriteSession() are protected, reached in normal use
+// only through the strictly-paired Writable::WriteSession RAII wrapper. This
+// exposes them so a test can call endWriteSession() without a matching
+// begin, to check the underflow guard on sessionDepth_.
+class TestableSerialWritable : public SerialWritable {
+public:
+  using SerialWritable::SerialWritable;
+  using SerialWritable::endWriteSession;
 };
 
 // 8 slots, so 7 usable bytes -- the real RingBuffer wants a power-of-two size
@@ -371,7 +392,7 @@ TEST_CASE("a write session locks once for the whole session, not once per "
 }
 
 TEST_CASE("a nested write session -- Logger's outer session plus printf's "
-          "inner one -- locks once per session on a recursive SerialTxSync") {
+          "inner one -- locks exactly once for the whole chain") {
   Fixture f;
   const std::array<uint8_t, 1> byte{1};
 
@@ -388,21 +409,22 @@ TEST_CASE("a nested write session -- Logger's outer session plus printf's "
     REQUIRE(f.serial.write(byte).has_value());
   }
 
-  // Two sessions, two lock()/unlock() pairs, nested: the inner session's
-  // lock() call happens while the outer one still holds it. Without a
-  // recursive SerialTxSync::lock() implementation this is exactly the
-  // self-deadlock SerialTxSync.h's lock() now documents against.
-  CHECK(f.sync.lockCallCount == 2);
-  CHECK(f.sync.unlockCallCount == 2);
-  CHECK(f.sync.maxLockDepth == 2);
+  // heldByCaller() reports true for the inner session and for every write()
+  // call once the outer session holds the lock, so only the outer session's
+  // beginWriteSession() ever actually calls lock() -- one pair for the whole
+  // chain, not one per session and not one per write() call.
+  CHECK(f.sync.lockCallCount == 1);
+  CHECK(f.sync.unlockCallCount == 1);
+  CHECK(f.sync.maxLockDepth == 1);
   CHECK(f.sync.lockDepth == 0);
   CHECK(f.sync.reentrantViolations == 0);
 }
 
-TEST_CASE("a non-recursive SerialTxSync::lock() would self-deadlock on the "
-          "nested session pattern") {
+TEST_CASE("a SerialTxSync whose heldByCaller() always reports false still "
+          "needs a recursive lock()") {
   Fixture f;
   f.sync.recursive = false;
+  f.sync.alwaysReportNotHeld = true;
   const std::array<uint8_t, 1> byte{1};
 
   {
@@ -414,12 +436,15 @@ TEST_CASE("a non-recursive SerialTxSync::lock() would self-deadlock on the "
     }
   }
 
-  // The inner session's lock() call re-enters while the outer session still
-  // holds it. On a plain (non-recursive) mutex that hangs forever instead of
-  // returning; here it is only recorded, since the fake never actually
-  // blocks -- this is why SerialTxSync.h requires lock()/unlock() to
-  // tolerate it.
-  CHECK(f.sync.reentrantViolations == 1);
+  // heldByCaller() always answering false (an implementer that got it wrong,
+  // rather than one who simply didn't bother) means write()'s own
+  // shouldSelfLock() check never sees "already held" either, so both write()
+  // calls try to lock again while the outer session still holds it. On a
+  // plain (non-recursive) mutex that hangs forever instead of returning --
+  // this is why SerialTxSync.h requires lock()/unlock() to tolerate
+  // reentrance unconditionally, not only as a fallback for implementers who
+  // skip heldByCaller().
+  CHECK(f.sync.reentrantViolations > 0);
 }
 
 TEST_CASE("sync hooks that forbid blocking mean a write session never "
@@ -451,4 +476,27 @@ TEST_CASE("a write session is a no-op without sync hooks") {
 
   CHECK(f.ring.empty());
   CHECK(f.uart.transmitted == std::vector<uint8_t>{1, 2, 3, 4});
+}
+
+TEST_CASE("an unbalanced endWriteSession() does not underflow the session "
+          "depth") {
+  Fixture f;
+  TestableSerialWritable serial(f.uart, f.ring, &f.sync, LOW_WATER);
+
+  // No matching beginWriteSession(): sessionDepth_ must clamp at zero rather
+  // than wrap (a uint8_t decrementing past zero would corrupt every future
+  // begin/end pairing, and a bitmask indexed by the wrapped value would be
+  // undefined behaviour).
+  serial.endWriteSession();
+  serial.endWriteSession();
+
+  // A subsequent, correctly paired session is unaffected by the stray end()
+  // calls above: still exactly one lock/unlock pair.
+  {
+    auto session = serial.writeSession();
+    CHECK(f.sync.lockDepth == 1);
+  }
+  CHECK(f.sync.lockDepth == 0);
+  CHECK(f.sync.lockCallCount == 1);
+  CHECK(f.sync.unlockCallCount == 1);
 }
