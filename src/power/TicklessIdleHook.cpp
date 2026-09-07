@@ -2,16 +2,15 @@
 #include <cmsis_device.h>
 #include <peripherals/Pwr.h>
 #include <peripherals/SysTick.h>
+#include <utils/Interrupt.h>
 
 namespace power {
 
 void TicklessIdleHook::enterSleep() {
-  const uint32_t primask = __get_PRIMASK();
-  __disable_irq();
+  Interrupt::CriticalSection cs;
   __DSB();
   __WFI();
   __ISB();
-  __set_PRIMASK(primask);
 }
 
 void TicklessIdleHook::enterLPRun() {
