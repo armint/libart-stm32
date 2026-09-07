@@ -23,6 +23,11 @@ public:
 
 template <typename T, std::size_t Size>
 class RingBuffer : public RingBufferBase<T> {
+  // Same constraint as the real implementation, so a test cannot pick a size
+  // the firmware could not use.
+  static_assert((Size & (Size - 1)) == 0, "Size must be a power of two");
+  static_assert(Size >= 2, "Size must be at least 2");
+
 public:
   // The real RingBuffer keeps one slot free to distinguish full from empty.
   static constexpr std::size_t Capacity = Size - 1u;

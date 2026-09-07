@@ -22,7 +22,12 @@ public:
   int armCount{0};
   int waitCount{0};
   int notifyCount{0};
-  bool notified{false};
+  // Models the binary semaphore behind the real hooks: a token survives until
+  // a wait consumes it or an arm drops it, so a notification that arrives
+  // early or too late behaves as it would on the target.
+  bool token{false};
+  std::vector<bool> tokenOnWaitEntry;
+  std::function<void()> onArm;
   std::function<void(uint32_t timeoutMs)> onWait;
 
   [[nodiscard]] bool canBlock() const override { return blockingAllowed; }
@@ -36,27 +41,32 @@ public:
 
   void armWait() override {
     armCount++;
-    notified = false;
+    token = false;
+    if (onArm) {
+      onArm();
+    }
   }
 
   bool wait(uint32_t timeoutMs) override {
     waitCount++;
+    tokenOnWaitEntry.push_back(token);
     if (onWait) {
       onWait(timeoutMs);
     }
-    const bool wasNotified = notified;
-    notified = false;
-    return wasNotified;
+    const bool hadToken = token;
+    token = false;
+    return hadToken;
   }
 
   void notifyFromIsr() override {
     notifyCount++;
-    notified = true;
+    token = true;
   }
 };
 
-// Ring of 9 slots, so 8 usable bytes -- the real RingBuffer keeps one free.
-constexpr size_t RING_SLOTS = 9;
+// 8 slots, so 7 usable bytes -- the real RingBuffer wants a power-of-two size
+// and keeps one slot free to tell full from empty.
+constexpr size_t RING_SLOTS = 8;
 constexpr size_t RING_CAPACITY = RING_SLOTS - 1;
 constexpr size_t LOW_WATER = 4;
 
@@ -82,7 +92,7 @@ struct Fixture {
   // been notified so a test can see exactly when the wake-up happened.
   size_t drainUntilNotified(size_t maxBytes) {
     size_t popped = 0;
-    while (popped < maxBytes && !sync.notified) {
+    while (popped < maxBytes && !sync.token) {
       const size_t before = ring.size();
       runTxInterrupt();
       if (ring.size() == before) {
@@ -181,7 +191,7 @@ TEST_CASE("a writer waiting for space is woken at the low-water mark") {
   std::vector<size_t> sizeAtNotify;
   f.sync.onWait = [&](uint32_t) {
     poppedDuringWait = f.drainUntilNotified(RING_CAPACITY);
-    if (f.sync.notified) {
+    if (f.sync.token) {
       sizeAtNotify.push_back(f.ring.size());
     }
   };
@@ -200,6 +210,60 @@ TEST_CASE("a writer waiting for space is woken at the low-water mark") {
   CHECK(poppedDuringWait == RING_CAPACITY - LOW_WATER);
   CHECK(f.sync.maxLockDepth == 1);
   CHECK(f.sync.lockDepth == 0);
+}
+
+TEST_CASE("a notification that arrives before the wait is not lost") {
+  Fixture f;
+  const std::array<uint8_t, 4> data{1, 2, 3, 4};
+  // The ISR runs between armWait() and the wait itself. The ISR only notifies
+  // once the buffer is at the level the writer is waiting for, so the
+  // re-check inside the critical section sees the same thing and the writer
+  // never blocks at all -- the token cannot strand it.
+  f.sync.onArm = [&]() { f.drainUntilNotified(RING_CAPACITY); };
+
+  REQUIRE(f.serial.write(data).has_value());
+  REQUIRE(f.serial.flush().has_value());
+
+  CHECK(f.ring.empty());
+  CHECK(f.uart.transmitted == std::vector<uint8_t>{1, 2, 3, 4});
+  CHECK(f.sync.armCount == 1);
+  CHECK(f.sync.waitCount == 0);
+}
+
+TEST_CASE("a token left by a timed-out wait is dropped before the next one") {
+  Fixture f;
+  const std::array<uint8_t, 2> data{1, 2};
+  f.sync.onWait = [&](uint32_t timeoutMs) {
+    utils::advanceTestClock(timeoutMs);
+  };
+
+  REQUIRE(f.serial.write(data).has_value());
+  REQUIRE_FALSE(f.serial.flush().has_value());
+
+  // The ISR fires just after the writer gave up, leaving a token behind.
+  f.sync.notifyFromIsr();
+  REQUIRE(f.sync.token);
+
+  f.sync.tokenOnWaitEntry.clear();
+  f.sync.onWait = [&](uint32_t) { f.drainUntilNotified(RING_CAPACITY); };
+  REQUIRE(f.serial.flush().has_value());
+
+  // The stale token must not have satisfied the new wait: it entered without
+  // one and only returned once the ISR had really drained the ring.
+  REQUIRE(f.sync.tokenOnWaitEntry.size() >= 1);
+  CHECK(f.sync.tokenOnWaitEntry[0] == false);
+  CHECK(f.ring.empty());
+}
+
+TEST_CASE("flush on an empty ring neither waits nor arms") {
+  Fixture f;
+
+  REQUIRE(f.serial.flush().has_value());
+
+  CHECK(f.sync.waitCount == 0);
+  CHECK(f.sync.armCount == 0);
+  CHECK(power::PowerManager::instance().getLockCount(power::SleepMode::Sleep) ==
+        0);
 }
 
 TEST_CASE("a drain that produced no notification is picked up by the next "
