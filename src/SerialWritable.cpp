@@ -104,9 +104,6 @@ SerialWritable::flushInterruptDriven(size_t count) {
   const size_t threshold = std::min(target, txLowWater_);
 
   while (txBuffer.size() > target) {
-    if (timeout.hasExpired()) {
-      break;
-    }
     // Armed outside the critical section below: a notification that arrives
     // between arming and waiting only causes one extra loop iteration, which
     // the buffer-level check above absorbs.
@@ -126,6 +123,11 @@ SerialWritable::flushInterruptDriven(size_t count) {
     }
     txSync_->wait(std::min(static_cast<uint32_t>(timeout.getDurationLeft()),
                            TX_WAIT_SLICE_MS));
+    // Checked after the wait, so an expired timeout does not cost another
+    // arm-and-wait round with a zero timeout.
+    if (timeout.hasExpired()) {
+      break;
+    }
   }
 
   {
