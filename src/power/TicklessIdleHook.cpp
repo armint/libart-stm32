@@ -135,42 +135,40 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
 }
 
 bool TicklessIdleHook::handleIdle(uint32_t expectedIdleMs) {
-  const uint32_t primask = __get_PRIMASK();
-  __disable_irq();
+  // Held for the whole function: every path below already unmasked
+  // immediately before its own return, so cs unwinding at each return
+  // reproduces that exactly. Unlike enterStop2()'s fallback, none of these
+  // branches need an early unmask -- enterSleep()/enterLPRun()/enterStop2()
+  // are called while still masked here, nesting correctly inside cs.
+  Interrupt::CriticalSection cs;
 
   const SleepMode mode = PowerManager::instance().deepestAllowedMode();
 
   switch (mode) {
   case SleepMode::Run:
     // No sleep allowed, yield execution
-    __set_PRIMASK(primask);
     return true;
 
   case SleepMode::Sleep:
     enterSleep();
-    __set_PRIMASK(primask);
     return true;
 
   case SleepMode::LPRun:
     enterLPRun();
-    __set_PRIMASK(primask);
     return true;
 
   case SleepMode::Stop2: {
     if (expectedIdleMs <= minStop2DurationMs_) {
       // Fast shallow sleep if deadline is within minimum overhead threshold
       enterSleep();
-      __set_PRIMASK(primask);
       return true;
     }
 
     enterStop2(expectedIdleMs);
-    __set_PRIMASK(primask);
     return true;
   }
   }
 
-  __set_PRIMASK(primask);
   return true;
 }
 
