@@ -12,6 +12,19 @@
  * canBlock() reports true and falls back to its polled path otherwise, which
  * keeps logging usable from an ISR, from a critical section, and before the
  * scheduler has started.
+ *
+ * Two requirements on the consumer:
+ *
+ *  - The USART interrupt that calls handleTxInterrupt() must run at a
+ *    priority the RTOS allows to call its from-ISR API. On Cortex-M with
+ *    FreeRTOS that means numerically at or above
+ *    configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY: a higher-priority
+ *    interrupt is not masked by the kernel's critical sections, so
+ *    notifyFromIsr() could corrupt kernel state.
+ *  - One instance serves exactly one SerialWritable. The waiting flag lives
+ *    in the SerialWritable while the lock and the notification live here, so
+ *    sharing an instance between two ports lets one port's ISR wake the
+ *    other port's writer.
  */
 class SerialTxSync {
 public:
