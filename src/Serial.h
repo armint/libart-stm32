@@ -18,11 +18,14 @@ class Serial : public SerialWritable, public SerialReadable {
    Serial &operator=(const Serial &) = delete;
    Serial &operator=(Serial &&) = delete;
 
+   // See SerialWritable for the meaning of txSync and txLowWater.
    Serial(USART_TypeDef *usartTypeDef,
           RingBufferBase<uint8_t> &txBuffer,
           RingBufferBase<uint8_t> &rxBuffer,
           RingBufferBase<uint16_t> *messageEndBuffer = nullptr,
-          RingBufferBase<uint16_t> *breakBuffer = nullptr);
+          RingBufferBase<uint16_t> *breakBuffer = nullptr,
+          SerialTxSync *txSync = nullptr,
+          size_t txLowWater = 0);
 
    ~Serial() override = default;
 
