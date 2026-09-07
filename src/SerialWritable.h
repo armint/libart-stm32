@@ -32,7 +32,6 @@ protected:
     return txSync_ != nullptr && txSync_->canBlock();
   }
 
-  std::expected<void, Error> flush(size_t count);
   std::expected<void, Error> flushUnlocked(size_t count, bool blocking);
   std::expected<void, Error> flushPolled(size_t count);
   std::expected<void, Error> flushInterruptDriven(size_t count);

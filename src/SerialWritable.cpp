@@ -157,12 +157,6 @@ SerialWritable::flushUnlocked(size_t count, bool blocking) {
   return flushPolled(count);
 }
 
-std::expected<void, Writable::Error> SerialWritable::flush(size_t count) {
-  const bool blocking = canBlock();
-  SerialTxLock lock(blocking ? txSync_ : nullptr);
-  return flushUnlocked(count, blocking);
-}
-
 std::expected<void, Writable::Error> SerialWritable::flush() {
   const bool blocking = canBlock();
   SerialTxLock lock(blocking ? txSync_ : nullptr);
