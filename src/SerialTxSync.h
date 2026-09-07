@@ -38,7 +38,12 @@ public:
    */
   [[nodiscard]] virtual bool canBlock() const = 0;
 
-  /** @brief Serialise task-context writers. Only called when canBlock(). */
+  /**
+   * @brief Serialise task-context writers. Only called when canBlock().
+   *
+   * With unlock() this satisfies BasicLockable, so the driver guards itself
+   * with std::lock_guard<SerialTxSync>.
+   */
   virtual void lock() = 0;
 
   /** @brief Counterpart of lock(). */
@@ -65,30 +70,4 @@ public:
 
   /** @brief Wake the blocked writer. Called from ISR context only. */
   virtual void notifyFromIsr() = 0;
-};
-
-/**
- * @brief RAII guard for SerialTxSync::lock(), tolerating a null sync.
- */
-class SerialTxLock {
-public:
-  explicit SerialTxLock(SerialTxSync *sync) : sync_(sync) {
-    if (sync_ != nullptr) {
-      sync_->lock();
-    }
-  }
-
-  ~SerialTxLock() {
-    if (sync_ != nullptr) {
-      sync_->unlock();
-    }
-  }
-
-  SerialTxLock(const SerialTxLock &) = delete;
-  SerialTxLock &operator=(const SerialTxLock &) = delete;
-  SerialTxLock(SerialTxLock &&) = delete;
-  SerialTxLock &operator=(SerialTxLock &&) = delete;
-
-private:
-  SerialTxSync *sync_;
 };
