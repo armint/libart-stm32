@@ -42,8 +42,16 @@ public:
    * @note The callback is called unconditionally after SysTick is resumed.
    * Under an RTOS, the implementation must advance the RTOS time (if elapsedMs > 0)
    * and request a scheduler reschedule so threads unblocked by the waking ISR
-   * execute immediately. If unset, sleep time in Stop 2 will not be accounted
-   * for and RTOS time will drift.
+   * execute immediately.
+   *
+   * Passed as a mandatory constructor argument (no default) precisely because
+   * an omitted callback silently drops sleep-time compensation instead of
+   * failing to build: under an RTOS, RTOS time will drift and threads
+   * unblocked by the waking ISR won't be rescheduled promptly, with no
+   * observable symptom until the drift accumulates. Bare-metal callers with
+   * no RTOS to compensate must still pass an explicit no-op (e.g.
+   * `[](uint32_t) {}`) so that choice is visible at the call site rather than
+   * an accidental default.
    */
   using TickCompensationCallback = void (*)(uint32_t elapsedMs);
 
@@ -56,11 +64,13 @@ public:
    */
   using TraceCallback = void (*)(char stage);
 
+  // tickCompCb has no default -- see TickCompensationCallback's doc comment
+  // for why it must be supplied explicitly at every call site.
   explicit TicklessIdleHook(
-      hw::Rtc &rtc, ClockRestoreCallback restoreClockCb = nullptr,
+      hw::Rtc &rtc, TickCompensationCallback tickCompCb,
+      ClockRestoreCallback restoreClockCb = nullptr,
       uint32_t minStop2DurationMs = 3u,
-      LPRunEnterCallback enterLPRunCb = nullptr,
-      TickCompensationCallback tickCompCb = nullptr)
+      LPRunEnterCallback enterLPRunCb = nullptr)
       : rtc_(rtc), restoreClockCallback_(restoreClockCb),
         enterLPRunCallback_(enterLPRunCb),
         tickCompensationCallback_(tickCompCb),
