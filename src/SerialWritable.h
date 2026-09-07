@@ -32,13 +32,28 @@ protected:
     return txSync_ != nullptr && txSync_->canBlock();
   }
 
-  // Whether the caller (write()/flush()/beginWriteSession()) should take
-  // txSync_'s lock itself right now: blocking must be allowed, and the
-  // current task must not already hold it via an enclosing WriteSession (see
-  // SerialTxSync::heldByCaller()). Re-evaluated independently on every call;
-  // that is only safe for the same-task question it answers -- see the note
-  // on sessionDepth_/selfLocked_ below for the one path that mutates state
-  // without it.
+  // Whether write()/flush() should take txSync_'s lock themselves right now:
+  // blocking must be allowed, and the current task must not already hold it
+  // via an enclosing WriteSession (see SerialTxSync::heldByCaller()).
+  // heldByCaller() is a genuine per-task query (e.g. backed by
+  // xSemaphoreGetMutexHolder() == xTaskGetCurrentTaskHandle()), so this is
+  // safe to evaluate fresh on every write()/flush() call: a call from a
+  // different task correctly sees "not held by me" and locks for real, which
+  // correctly blocks against whichever task actually holds it.
+  //
+  // beginWriteSession()/endWriteSession() below deliberately do NOT use this
+  // check, nor track anything like "is a session already open" themselves --
+  // that would be per-instance state answering a per-task question. A task
+  // can hold a session open across a blocking wait() (see
+  // flushInterruptDriven()), during which a genuinely different task must
+  // still see "not held" and really lock; instance-wide bookkeeping cannot
+  // tell that apart from "the same task re-entering" without also racing on
+  // the bookkeeping itself at the lock/unlock boundary. So every
+  // beginWriteSession()/endWriteSession() call locks/unlocks unconditionally
+  // on canBlock(), same as write()/flush() did before this class opted into
+  // WriteSession: two lock/unlock pairs for a nested Logger-plus-printf line
+  // rather than one, but correct under real cross-task contention, which a
+  // single shared pair is not.
   [[nodiscard]] bool shouldSelfLock() const {
     return canBlock() && !txSync_->heldByCaller();
   }
@@ -49,19 +64,6 @@ protected:
   std::expected<size_t, Error> writeUnlocked(std::span<const uint8_t> data,
                                              bool blocking);
   void releaseOrArmTransferComplete();
-
-  // How deep the current chain of nested WriteSessions is, and whether/where
-  // one of them actually took the real lock -- see beginWriteSession()/
-  // endWriteSession() below. Because heldByCaller() reports true for every
-  // level once the outermost one has locked, at most one level in a chain
-  // ever actually locks; selfLockedAtDepth_ records which, so only that
-  // level's matching end() releases it. Both are mutated unconditionally,
-  // including when canBlock() is false, which is safe only because ISRs
-  // never open a WriteSession on the same sink (project convention) -- an
-  // ISR doing so here would race the task it interrupted.
-  uint8_t sessionDepth_{0};
-  bool selfLocked_{false};
-  uint8_t selfLockedAtDepth_{0};
 
   void beginWriteSession() noexcept override;
   void endWriteSession() noexcept override;

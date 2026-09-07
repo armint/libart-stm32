@@ -161,21 +161,14 @@ SerialWritable::flushUnlocked(size_t count, bool blocking) {
 }
 
 void SerialWritable::beginWriteSession() noexcept {
-  if (!selfLocked_ && shouldSelfLock()) {
+  if (canBlock()) {
     txSync_->lock();
-    selfLocked_ = true;
-    selfLockedAtDepth_ = sessionDepth_;
   }
-  ++sessionDepth_;
 }
 
 void SerialWritable::endWriteSession() noexcept {
-  if (sessionDepth_ > 0) {
-    --sessionDepth_;
-  }
-  if (selfLocked_ && sessionDepth_ == selfLockedAtDepth_) {
+  if (canBlock()) {
     txSync_->unlock();
-    selfLocked_ = false;
   }
 }
 
