@@ -36,9 +36,15 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
   // Mask interrupts around sleep configuration and WFI to prevent preemption
   // and race conditions where an ISR readies a task between arming WUT and __WFI().
   // On ARMv7-M, __WFI() still wakes up when an enabled interrupt becomes pending.
-  // Held in an optional (rather than a plain guard) so the WUTWF-timeout
-  // fallback below can unmask early, before falling back to enterSleep() --
-  // see the comment there.
+  //
+  // Held in std::optional rather than a plain guard: cs restores whatever
+  // PRIMASK the caller had on entry, not zero -- holding it across the
+  // enterSleep() call below would leave PRIMASK in the same state either way,
+  // since both are save/restore. The optional exists only so the restore
+  // point stays instruction-for-instruction identical to the original manual
+  // __set_PRIMASK(primask) call that used to precede enterSleep() here (see
+  // the comment there), matching #8's requirement to preserve the masking
+  // scope exactly.
   std::optional<Interrupt::CriticalSection> cs{std::in_place};
 
   // Local shorthand for the optional trace callback.
@@ -56,10 +62,11 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
       (durationMs > kMaxWakeupDurationMs) ? kMaxWakeupDurationMs : durationMs;
   if (!rtc_.armWakeup(clampedDurationMs)) {
     // If WUTWF poll timed out, fall back to shallow sleep rather than sleeping
-    // indefinitely without a timed wakeup source. Unmask here (rather than
-    // leaving cs to unwind at the end of the function) so enterSleep() runs
-    // its own independent mask/unmask cycle instead of nesting inside this
-    // one.
+    // indefinitely without a timed wakeup source. Destroy cs here -- rather
+    // than letting it unwind at the end of the function -- so PRIMASK is
+    // restored at exactly the point the original __set_PRIMASK(primask) call
+    // did, right before enterSleep(), matching the original
+    // instruction-for-instruction.
     trace('!');
     cs.reset();
     enterSleep();
@@ -135,11 +142,12 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
 }
 
 bool TicklessIdleHook::handleIdle(uint32_t expectedIdleMs) {
-  // Held for the whole function: every path below already unmasked
-  // immediately before its own return, so cs unwinding at each return
-  // reproduces that exactly. Unlike enterStop2()'s fallback, none of these
-  // branches need an early unmask -- enterSleep()/enterLPRun()/enterStop2()
-  // are called while still masked here, nesting correctly inside cs.
+  // Held for the whole function: every path below already restored PRIMASK
+  // to whatever the caller had on entry immediately before its own return, so
+  // cs unwinding at each return reproduces that exactly. The nested
+  // enterSleep()/enterLPRun()/enterStop2() calls run while cs is still held,
+  // nesting correctly inside it (unlike enterStop2()'s own WUTWF-timeout
+  // fallback, which destroys its guard early -- see the comment there).
   Interrupt::CriticalSection cs;
 
   const SleepMode mode = PowerManager::instance().deepestAllowedMode();
