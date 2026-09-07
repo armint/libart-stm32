@@ -60,6 +60,26 @@ public:
   virtual void unlock() = 0;
 
   /**
+   * @brief Whether the calling task already holds the lock.
+   *
+   * Lets SerialWritable skip a redundant lock()/unlock() pair when
+   * beginWriteSession()/write()/flush() runs while an enclosing WriteSession
+   * on the same task already holds it -- e.g. logging::Logger holding an
+   * outer session while a nested printf() call opens its own on the same
+   * task. A typical FreeRTOS implementation:
+   * xSemaphoreGetMutexHolder(handle) == xTaskGetCurrentTaskHandle(). A
+   * single-threaded or no-RTOS implementation can track whether lock() has
+   * been called more times than unlock().
+   *
+   * @warning This is a latency/contention optimisation layered on top of the
+   * requirement documented on lock() above, not a substitute for it: always
+   * returning false here is a valid (if suboptimal) implementation, and
+   * lock()/unlock() must still tolerate the same task's nested calls
+   * regardless of what this reports.
+   */
+  [[nodiscard]] virtual bool heldByCaller() const = 0;
+
+  /**
    * @brief Discard a notification left over from an earlier wait.
    *
    * Called just before a wait is armed, never from inside a critical
