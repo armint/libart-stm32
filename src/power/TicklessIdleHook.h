@@ -15,6 +15,22 @@ namespace power {
  */
 class TicklessIdleHook {
 public:
+  /**
+   * @brief Callback invoked to bring the system clock back up after a sleep.
+   *
+   * @warning It is invoked after every Stop2 attempt, including attempts that
+   * never actually slept. `__WFI()` returns immediately when an enabled
+   * interrupt is already pending, in which case Stop2 was not entered and the
+   * clock was never lost — and there is no architectural flag the hook can
+   * test to tell the two apart. Implementations must therefore be
+   * **idempotent and cheap**: check whether the clock is already at the
+   * intended source and return early if so, rather than unconditionally
+   * re-running a full bring-up.
+   *
+   * This matters on STM32WL in particular, where bringing up the 48 MHz
+   * HSE/TCXO clock talks to the sub-GHz radio; an unconditional bring-up on
+   * every idle pass can disturb radio state.
+   */
   using ClockRestoreCallback = void (*)();
   using LPRunEnterCallback = void (*)();
   /**
