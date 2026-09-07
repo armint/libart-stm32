@@ -1,22 +1,21 @@
 #include "TicklessIdleHook.h"
 #include <cmsis_device.h>
+#include <optional>
 #include <peripherals/Pwr.h>
 #include <peripherals/SysTick.h>
+#include <utils/Interrupt.h>
 
 namespace power {
 
 void TicklessIdleHook::enterSleep() {
-  const uint32_t primask = __get_PRIMASK();
-  __disable_irq();
+  Interrupt::CriticalSection cs;
   __DSB();
   __WFI();
   __ISB();
-  __set_PRIMASK(primask);
 }
 
 void TicklessIdleHook::enterLPRun() {
-  const uint32_t primask = __get_PRIMASK();
-  __disable_irq();
+  Interrupt::CriticalSection cs;
   // Only restore the clock if something actually lowered it. With no LPRun
   // enter callback configured this is a plain WFI that never touches the
   // clock, so invoking the restore callback would re-run a full clock
@@ -31,15 +30,22 @@ void TicklessIdleHook::enterLPRun() {
   if (loweredClock && restoreClockCallback_) {
     restoreClockCallback_();
   }
-  __set_PRIMASK(primask);
 }
 
 void TicklessIdleHook::enterStop2(uint32_t durationMs) {
   // Mask interrupts around sleep configuration and WFI to prevent preemption
   // and race conditions where an ISR readies a task between arming WUT and __WFI().
   // On ARMv7-M, __WFI() still wakes up when an enabled interrupt becomes pending.
-  const uint32_t primask = __get_PRIMASK();
-  __disable_irq();
+  //
+  // Held in std::optional rather than a plain guard: cs restores whatever
+  // PRIMASK the caller had on entry, not zero -- holding it across the
+  // enterSleep() call below would leave PRIMASK in the same state either way,
+  // since both are save/restore. The optional exists only so the restore
+  // point stays instruction-for-instruction identical to the original manual
+  // __set_PRIMASK(primask) call that used to precede enterSleep() here (see
+  // the comment there), matching #8's requirement to preserve the masking
+  // scope exactly.
+  std::optional<Interrupt::CriticalSection> cs{std::in_place};
 
   // Local shorthand for the optional trace callback.
   const auto trace = [this](char c) {
@@ -56,9 +62,13 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
       (durationMs > kMaxWakeupDurationMs) ? kMaxWakeupDurationMs : durationMs;
   if (!rtc_.armWakeup(clampedDurationMs)) {
     // If WUTWF poll timed out, fall back to shallow sleep rather than sleeping
-    // indefinitely without a timed wakeup source.
+    // indefinitely without a timed wakeup source. Destroy cs here -- rather
+    // than letting it unwind at the end of the function -- so PRIMASK is
+    // restored at exactly the point the original __set_PRIMASK(primask) call
+    // did, right before enterSleep(), matching the original
+    // instruction-for-instruction.
     trace('!');
-    __set_PRIMASK(primask);
+    cs.reset();
     enterSleep();
     return;
   }
@@ -127,47 +137,46 @@ void TicklessIdleHook::enterStop2(uint32_t durationMs) {
 
   trace('\n');
 
-  // 12. Restore interrupt state. Pending interrupts will fire immediately.
-  __set_PRIMASK(primask);
+  // 12. Restore interrupt state. Pending interrupts will fire immediately,
+  // via cs unwinding at function exit.
 }
 
 bool TicklessIdleHook::handleIdle(uint32_t expectedIdleMs) {
-  const uint32_t primask = __get_PRIMASK();
-  __disable_irq();
+  // Held for the whole function: every path below already restored PRIMASK
+  // to whatever the caller had on entry immediately before its own return, so
+  // cs unwinding at each return reproduces that exactly. The nested
+  // enterSleep()/enterLPRun()/enterStop2() calls run while cs is still held,
+  // nesting correctly inside it (unlike enterStop2()'s own WUTWF-timeout
+  // fallback, which destroys its guard early -- see the comment there).
+  Interrupt::CriticalSection cs;
 
   const SleepMode mode = PowerManager::instance().deepestAllowedMode();
 
   switch (mode) {
   case SleepMode::Run:
     // No sleep allowed, yield execution
-    __set_PRIMASK(primask);
     return true;
 
   case SleepMode::Sleep:
     enterSleep();
-    __set_PRIMASK(primask);
     return true;
 
   case SleepMode::LPRun:
     enterLPRun();
-    __set_PRIMASK(primask);
     return true;
 
   case SleepMode::Stop2: {
     if (expectedIdleMs <= minStop2DurationMs_) {
       // Fast shallow sleep if deadline is within minimum overhead threshold
       enterSleep();
-      __set_PRIMASK(primask);
       return true;
     }
 
     enterStop2(expectedIdleMs);
-    __set_PRIMASK(primask);
     return true;
   }
   }
 
-  __set_PRIMASK(primask);
   return true;
 }
 
