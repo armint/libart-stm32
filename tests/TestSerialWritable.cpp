@@ -170,6 +170,34 @@ TEST_CASE("sync hooks that forbid blocking fall back to the polled path") {
   CHECK(f.sync.maxLockDepth == 0);
 }
 
+TEST_CASE("a direct write()/flush() call outside any session still takes "
+          "the lock itself") {
+  Fixture f;
+  const std::array<uint8_t, 4> data{1, 2, 3, 4};
+  // flush() below takes the interrupt-driven (blocking) path since
+  // blockingAllowed defaults true; drive its wait() the same way the
+  // existing blocking tests do, or it spins until the 5 s flush timeout.
+  f.sync.onWait = [&](uint32_t) { f.drainUntilNotified(RING_CAPACITY); };
+
+  // No writeSession() open: heldByCaller() reports false (nobody holds it),
+  // so write()'s/flush()'s own shouldSelfLock() check takes the lock. This
+  // is the property SerialTxSync::heldByCaller() exists for -- a caller that
+  // never opens a WriteSession stays serialised exactly as it was before
+  // this class opted into WriteSession, with no contract narrowing left
+  // behind. If this guard were ever dropped in favour of only locking in
+  // beginWriteSession()/endWriteSession(), this is the case that would
+  // regress.
+  REQUIRE(f.serial.write(data).has_value());
+  CHECK(f.sync.lockCallCount == 1);
+  CHECK(f.sync.unlockCallCount == 1);
+  CHECK(f.sync.lockDepth == 0);
+
+  REQUIRE(f.serial.flush().has_value());
+  CHECK(f.sync.lockCallCount == 2);
+  CHECK(f.sync.unlockCallCount == 2);
+  CHECK(f.sync.lockDepth == 0);
+}
+
 TEST_CASE("flush blocks until the TX interrupt has drained the ring") {
   Fixture f;
   const std::array<uint8_t, 4> data{1, 2, 3, 4};
