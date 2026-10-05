@@ -43,11 +43,17 @@ public:
   std::vector<uint8_t> armedOut;
   std::map<uint8_t, std::vector<uint8_t>> outData;
   std::map<uint8_t, bool> stalled;
+  // STAT VALID: armed by armOut() or startIn(), not completed yet.
+  std::map<uint8_t, bool> valid;
+  // Data toggle (DTOG) of each endpoint direction: 0 = DATA0.
+  std::map<uint8_t, int> toggle;
   std::vector<uint8_t> nakCalls;
   int setStallCalls{0};
-  // Models the toggle-write race of the real driver: the next setStall(true)
-  // leaves the endpoint not stalled.
-  bool loseNextStall{false};
+  // Models the read + toggle-write race of the real driver: the next STAT or
+  // DTOG write on a VALID endpoint runs while a transaction completes. The
+  // hardware sets the endpoint to NAK and flips DTOG between the read and
+  // the write, so the write leaves a wrong result.
+  bool raceOnNextWrite{false};
 
   void begin(usb::EventCallback cb, void *ctx) {
     callback = cb;
@@ -78,11 +84,14 @@ public:
       return false;
     }
     lastIn[ep].assign(data.begin(), data.end());
+    valid[ep] = true;
     return true;
   }
 
   bool armOut(uint8_t ep) {
     armedOut.push_back(ep);
+    valid[ep] = true;
+    stalled[ep] = false;
     return true;
   }
 
@@ -101,25 +110,57 @@ public:
 
   void setStall(uint8_t ep, bool stall) {
     ++setStallCalls;
-    if (stall && loseNextStall) {
-      loseNextStall = false;
+    if (racing(ep)) {
+      // STALL: VALID ^ (VALID ^ STALL) after NAK gives DISABLED. Clear: the
+      // DTOG write undoes the toggle of the transaction, so it ends at DATA1.
+      if (!stall) {
+        toggle[ep] = 1;
+      }
       stalled[ep] = false;
       return;
     }
     stalled[ep] = stall;
+    if (!stall) {
+      toggle[ep] = 0;
+    }
   }
   bool isStalled(uint8_t ep) const {
     auto it = stalled.find(ep);
     return it != stalled.end() && it->second;
   }
 
-  void setNak(uint8_t ep) { nakCalls.push_back(ep); }
+  void setNak(uint8_t ep) {
+    nakCalls.push_back(ep);
+    if (racing(ep)) {
+      // NAK ^ (VALID ^ NAK) gives VALID again.
+      valid[ep] = true;
+      return;
+    }
+    valid[ep] = false;
+    stalled[ep] = false;
+  }
+
+  // Test helper: the host completes a transaction on a VALID endpoint.
+  void complete(uint8_t ep) {
+    valid[ep] = false;
+    toggle[ep] ^= 1;
+  }
 
   // Test helper: raises an event as the interrupt handler does.
   void raise(const usb::Event &event) {
     if (callback != nullptr) {
       callback(context, event);
     }
+  }
+
+private:
+  bool racing(uint8_t ep) {
+    if (!raceOnNextWrite || !valid[ep]) {
+      return false;
+    }
+    raceOnNextWrite = false;
+    complete(ep);
+    return true;
   }
 };
 

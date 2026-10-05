@@ -219,19 +219,17 @@ void Stm32UsbDeviceController::setEndpointStall(uint8_t endpointAddress, bool st
    if(!isOpen(endpointAddress) || isSupersededControlCall(endpointAddress)) {
       return;
    }
-   device_.setStall(endpointAddress, stall);
-   // The second write corrects the race of a transaction that completes
-   // during the first one (see closeEndpoint()). Not on EP0: there a new
-   // SETUP packet also ends the STALL, and a second write would stall the new
-   // request. EP0 OUT also stays VALID after a clear, for the next SETUP.
-   if(endpointNumber(endpointAddress) == 0u) {
-      return;
-   }
-   if(!stall) {
+   if(endpointNumber(endpointAddress) != 0u) {
+      // setStall() is race-free only on an endpoint that is not VALID: a
+      // transaction that completes during it can leave a wrong STAT, or DTOG
+      // at DATA1 after a clear. So set NAK first (two writes, see
+      // closeEndpoint()). EP0 keeps the single write: the hardware NAKs it
+      // after each SETUP and each packet, so it is normally not VALID when
+      // the protocol layer stalls it, and the next SETUP ends a STALL.
       device_.setNak(endpointAddress);
-   } else if(!device_.isStalled(endpointAddress)) {
-      device_.setStall(endpointAddress, true);
+      device_.setNak(endpointAddress);
    }
+   device_.setStall(endpointAddress, stall);
 }
 
 bool Stm32UsbDeviceController::startInTransfer(uint8_t endpointAddress, art::span<const uint8_t> packet) {

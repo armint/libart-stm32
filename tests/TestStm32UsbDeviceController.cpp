@@ -264,25 +264,38 @@ TEST_CASE("Stm32UsbDeviceController stalls and clears endpoints") {
   f.openEp0();
   REQUIRE(f.controller.openEndpoint({0x82, art::usb::EndpointType::Bulk, 64}));
 
+  REQUIRE(f.controller.openEndpoint({0x02, art::usb::EndpointType::Bulk, 64}));
+  const std::array<uint8_t, 1> data{7};
+
   SUBCASE("stall") {
     f.controller.setEndpointStall(0x82, true);
     CHECK(f.hardware.isStalled(0x82));
     CHECK(f.hardware.setStallCalls == 1);
   }
-  SUBCASE("a stall lost to the toggle race is written again") {
-    f.hardware.loseNextStall = true;
+  SUBCASE("stall on a VALID endpoint while a transaction completes") {
+    REQUIRE(f.controller.startInTransfer(0x82, data));
+    f.hardware.raceOnNextWrite = true;
     f.controller.setEndpointStall(0x82, true);
     CHECK(f.hardware.isStalled(0x82));
-    CHECK(f.hardware.setStallCalls == 2);
+    CHECK_FALSE(f.hardware.valid[0x82]);
   }
-  SUBCASE("clear sets NAK again") {
+  SUBCASE("clear on a stalled endpoint") {
     f.controller.setEndpointStall(0x82, true);
     f.controller.setEndpointStall(0x82, false);
     CHECK_FALSE(f.hardware.isStalled(0x82));
-    CHECK(f.hardware.nakCalls == std::vector<uint8_t>{0x82});
+    CHECK(f.hardware.toggle[0x82] == 0);
+  }
+  SUBCASE("clear on a VALID endpoint resets the toggle") {
+    // CLEAR_FEATURE(ENDPOINT_HALT) on an endpoint that is not halted.
+    f.hardware.toggle[0x02] = 1;
+    f.controller.armOutTransfer(0x02);
+    f.hardware.raceOnNextWrite = true;
+    f.controller.setEndpointStall(0x02, false);
+    CHECK(f.hardware.toggle[0x02] == 0);
+    CHECK_FALSE(f.hardware.valid[0x02]);
+    CHECK_FALSE(f.hardware.isStalled(0x02));
   }
   SUBCASE("EP0 is written once") {
-    f.hardware.loseNextStall = true;
     f.controller.setEndpointStall(0x80, true);
     f.controller.setEndpointStall(0x00, false);
     CHECK(f.hardware.setStallCalls == 2);
