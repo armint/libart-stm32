@@ -18,10 +18,15 @@ Stm32UsbDeviceController usbController(usbHardware, usbEvents);
 art::usb::Device usbDevice(usbController, descriptors);
 
 usbController.begin(); // USB clock must be on (see system-stm32 README)
-usbDevice.start();     // pull-up on
+// Do the long initialization here, before start().
+usbDevice.start();     // pull-up on: the host starts enumeration
 // In the main loop:
 usbController.poll();
 ```
+
+Call `start()` immediately before the main loop starts to call `poll()`.
+After `start()`, the host resets the device and sends SETUP packets. If
+`poll()` does not run, the events fill the queue.
 
 ### Interrupt and main loop
 
@@ -51,8 +56,24 @@ usbController.poll();
 An endpoint answers NAK until it is armed again. Thus each endpoint
 direction puts at most one packet event into the queue. Add SETUP packets and
 bus events (reset, suspend, resume). A queue of 16 entries is sufficient for
-CDC-ACM and MSC together. `droppedEvents()` counts the events that did not fit
-into the queue.
+CDC-ACM and MSC together, while the main loop calls `poll()`.
+This estimate is not valid when the main loop is blocked: the host retries the
+enumeration and sends more SETUP packets and bus resets.
+
+When the queue is full, the interrupt drops the newest event.
+`droppedEvents()` counts the dropped events. The controller cannot recover
+from a dropped event:
+
+- A dropped OUT or IN event stops that endpoint until the next bus reset or
+  SET_CONFIGURATION.
+- A dropped bus reset leaves `usb::Device` in its old state, but the hardware
+  is in the reset state.
+
+If `droppedEvents()` increases, recover with a new enumeration:
+
+1. Call `usbDevice.stop()`. The host sees a disconnect.
+2. Call `usbController.poll()` to empty the queue.
+3. Call `usbDevice.start()`. The host enumerates the device again.
 
 ### Limits
 

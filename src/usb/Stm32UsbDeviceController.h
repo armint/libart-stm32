@@ -59,7 +59,9 @@
  * Queue size: an endpoint NAKs until it is armed again, so each endpoint
  * direction queues at most one Out or InComplete event. Add SETUP packets and
  * bus events (reset, suspend, resume). 16 entries are enough for CDC-ACM and
- * MSC together. droppedEvents() counts the events that did not fit.
+ * MSC together, while the main loop runs poll(). droppedEvents() counts
+ * the events that did not fit: the newest event is dropped. A dropped event
+ * cannot be recovered without a new enumeration (see README, "Queue size").
  *
  * Threading: call every function except the interrupt callback from the main
  * loop, the same context that runs poll().
