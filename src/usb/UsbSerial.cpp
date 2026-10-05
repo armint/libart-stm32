@@ -2,20 +2,35 @@
 
 #if defined(ART_STM32_HAS_USB_SERIAL)
 
+#include <array>
+
 UsbSerial::UsbSerial(art::usb::CdcAcmFunctionBase &function)
    : function_(function) {
 }
 
 std::expected<char, Readable::Error> UsbSerial::read() {
    uint8_t byte = 0u;
-   if(function_.read(std::span<uint8_t>(&byte, 1u)) == 0u) {
+   if(!acceptsInput() || function_.read(std::span<uint8_t>(&byte, 1u)) == 0u) {
       return std::unexpected(Readable::Timeout);
    }
    return static_cast<char>(byte);
 }
 
 bool UsbSerial::available() {
-   return function_.readAvailable() > 0u;
+   return acceptsInput() && function_.readAvailable() > 0u;
+}
+
+bool UsbSerial::acceptsInput() {
+   if(function_.isTerminalOpen()) {
+      return true;
+   }
+   // The data is from a terminal session that has ended. Discard it, so that
+   // it does not reach the next session. The discard also lets the function
+   // arm its OUT endpoint again.
+   std::array<uint8_t, art::usb::CdcAcmFunctionBase::kDataPacketSize> scratch{};
+   while(function_.read(scratch) != 0u) {
+   }
+   return false;
 }
 
 std::expected<size_t, Writable::Error> UsbSerial::write(std::span<const uint8_t> data) {

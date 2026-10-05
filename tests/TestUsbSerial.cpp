@@ -180,22 +180,87 @@ TEST_CASE("UsbSerial drops what does not fit when the host does not read") {
   CHECK(bench.serial.droppedBytes() == 0);
 }
 
-TEST_CASE("UsbSerial drops writes again after the terminal closes or the bus "
-          "resets") {
+TEST_CASE("UsbSerial drops writes after the terminal closes or the bus "
+          "resets, and sends again when a terminal opens") {
   Bench bench;
   bench.enumerate();
   bench.setDtr(true);
 
-  SUBCASE("terminal closes") { bench.setDtr(false); }
-  SUBCASE("bus reset") { bench.controller().busReset(); }
+  SUBCASE("terminal closes and opens again") {
+    bench.setDtr(false);
+    bench.serial.write(bytes("abc"));
+    CHECK(bench.serial.droppedBytes() == 3);
+    bench.setDtr(true);
+  }
+  SUBCASE("bus reset and new enumeration") {
+    bench.controller().busReset();
+    bench.serial.write(bytes("abc"));
+    CHECK(bench.serial.droppedBytes() == 3);
+    bench.enumerate();
+    bench.setDtr(true);
+  }
 
-  bench.serial.write(bytes("abc"));
+  bench.serial.write(bytes("new"));
   CHECK(bench.serial.droppedBytes() == 3);
+  CHECK(bench.readTransfer() == "new");
+}
+
+TEST_CASE("UsbSerial discards received data while no terminal is open") {
+  Bench bench;
+  bench.enumerate();
+  bench.setDtr(true);
+  REQUIRE(bench.sendOut("old"));
+  bench.setDtr(false);
+
+  CHECK_FALSE(bench.serial.available());
+  CHECK_FALSE(bench.serial.read().has_value());
+  // Data without an open terminal is discarded too.
+  REQUIRE(bench.sendOut("x"));
+  CHECK_FALSE(bench.serial.available());
+
+  bench.setDtr(true);
+  CHECK_FALSE(bench.serial.available());
+  REQUIRE(bench.sendOut("new"));
+  std::array<char, 3> data{};
+  REQUIRE(bench.serial.read(std::span<char>(data)).has_value());
+  CHECK(std::string(data.begin(), data.end()) == "new");
+  CHECK_FALSE(bench.serial.available());
+}
+
+TEST_CASE("UsbSerial keeps old data when a session ends between two calls "
+          "(known limit, libArT issue 48)") {
+  Bench bench;
+  bench.enumerate();
+  bench.setDtr(true);
+
+  SUBCASE("RX: no read() or available() while the port was closed") {
+    REQUIRE(bench.sendOut("old"));
+    bench.setDtr(false);
+    bench.setDtr(true);
+    REQUIRE(bench.sendOut("new"));
+    std::array<char, 6> data{};
+    REQUIRE(bench.serial.read(std::span<char>(data)).has_value());
+    CHECK(std::string(data.begin(), data.end()) == "oldnew");
+  }
+  SUBCASE("TX: data that the host did not read goes to the next terminal") {
+    const std::string old(100, 'o');
+    bench.serial.write(bytes(old));
+    bench.setDtr(false);
+    bench.setDtr(true);
+    bench.serial.write(bytes("new"));
+    std::string received;
+    for (std::string transfer = bench.readTransfer(); !transfer.empty();
+         transfer = bench.readTransfer()) {
+      received += transfer;
+    }
+    CHECK(received == old + "new");
+  }
 }
 
 TEST_CASE("UsbSerial reads what the host sent") {
   Bench bench;
   bench.enumerate();
+  bench.setDtr(true);
 
   CHECK_FALSE(bench.serial.available());
   auto none = bench.serial.read();
@@ -223,6 +288,7 @@ TEST_CASE("UsbSerial reads what the host sent") {
 TEST_CASE("UsbSerial reading makes room, so the host can send again") {
   Bench bench;
   bench.enumerate();
+  bench.setDtr(true);
 
   const std::string packet(64, 'p');
   REQUIRE(bench.sendOut(packet));

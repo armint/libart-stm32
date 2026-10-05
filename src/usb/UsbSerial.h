@@ -29,6 +29,18 @@
  *    is not configured). droppedBytes() counts the dropped bytes. write()
  *    reports all bytes as written, so that a logger never stops on a full or
  *    closed port.
+ *
+ * Terminal sessions: a session starts when the host sets DTR and ends when
+ * it clears DTR. The CDC-ACM function does not clear its queues at the end of
+ * a session (libArT issue embedded-libraries/libart#48). Thus:
+ *  - RX: while no terminal is open, read() and available() discard the
+ *    received data and report none. Call one of them in each main loop
+ *    iteration, so that data of an ended session does not reach the next
+ *    one. If the next session starts before such a call, its data comes
+ *    after the old data.
+ *  - TX: data that write() queued before the session ended, and that the
+ *    host did not read, stays in the TX queue. The next terminal receives
+ *    it before the new data.
  *  - flush() returns at once. poll() sends the TX queue.
  *
  * Threading: call it only from the main loop, the context that runs poll().
@@ -64,6 +76,9 @@ class UsbSerial : public Readable, public Writable {
    }
 
    private:
+   /// True if a terminal is open. Otherwise it discards the RX queue.
+   bool acceptsInput();
+
    art::usb::CdcAcmFunctionBase &function_;
    uint32_t droppedBytes_ = 0u;
 };

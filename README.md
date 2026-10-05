@@ -113,6 +113,22 @@ loop cannot make progress.
 - Call `UsbSerial` only from the main loop, the context that calls `poll()`.
   The CDC-ACM function does no locking.
 
+### Terminal sessions
+
+A terminal session starts when the host sets DTR. It ends when the host
+clears DTR. The CDC-ACM function does not clear its queues at the end of a
+session ([libart#48](https://gitlab.vandertogt.org/embedded-libraries/libart/-/issues/48)).
+`UsbSerial` handles the RX side, but not the TX side:
+
+- RX: while no terminal is open, `read()` and `available()` discard the
+  received data and report no data. Call one of them in each main loop
+  iteration. Then the data of an ended session does not reach the next
+  session. If the next session starts before such a call, its data comes
+  after the old data.
+- TX: data that `write()` put into the TX queue before the session ended,
+  and that the host did not read, stays in the TX queue. The next terminal
+  receives this data before the new data.
+
 ## Host tests
 
 `tests/` contains host tests with doctest. Stubs in `tests/stubs` replace the
