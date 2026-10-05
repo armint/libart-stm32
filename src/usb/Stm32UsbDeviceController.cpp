@@ -167,6 +167,10 @@ void Stm32UsbDeviceController::setAddress(uint8_t address) {
    // A SETUP or a reset that the interrupt queued before the store above
    // already aborted this SET_ADDRESS, and the interrupt could not drop the
    // address yet. One that comes after the store drops it in the interrupt.
+   // This needs the store before the loads. An acquire load does not keep an
+   // earlier relaxed store before it, so the fence does (one core, so a
+   // compiler barrier is enough). Do not remove or relax it.
+   std::atomic_signal_fence(std::memory_order_seq_cst);
    if(setupsQueued_.load(std::memory_order_acquire) != setupsDelivered_ ||
       resetsQueued_.load(std::memory_order_acquire) != resetsDelivered_) {
       pendingAddress_.store(kNoAddress, std::memory_order_relaxed);
