@@ -14,6 +14,21 @@ file(GLOB_RECURSE PROJECT_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )
 
+# STM32F1 does not have the peripherals some sources need, so leave them out
+# (STM32_FAMILY comes from system-stm32):
+# - I2cMaster: uses the I2C v2 registers (TIMINGR, ISR, TXDR); F1 has I2C v1.
+# - power/TicklessIdleHook: uses the RTC wake-up timer and Stop 2 mode.
+#   PowerManager stays, because SerialWritable needs it for its SleepLock.
+# - sensors/InternalTemperatureSensor: needs the system-stm32 Adc with
+#   factory calibration values; F1 has no calibration values in flash.
+if (STM32_FAMILY STREQUAL "STM32F1")
+    list(REMOVE_ITEM PROJECT_SOURCES
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/I2cMaster.cpp"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/power/TicklessIdleHook.cpp"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/sensors/InternalTemperatureSensor.cpp"
+    )
+endif ()
+
 file(GLOB_RECURSE PROJECT_HEADERS
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
