@@ -108,7 +108,11 @@ void Stm32UsbDeviceController::deliver(const Event &event) {
    if(event.type == hw::usb::EventType::Reset) {
       ++resetsDelivered_;
       // hw::UsbDevice has closed every endpoint and reopened EP0 for the
-      // protocol layer to open again.
+      // protocol layer to open again. A handler that ran during the reset
+      // interrupt (for example SET_CONFIGURATION) can have opened endpoints
+      // again in the hardware since. The protocol layer has not seen the
+      // reset yet, so no endpoint after it is open: free them all.
+      device_.closeAllEndpoints();
       openIn_ = 0u;
       openOut_ = 0u;
       if(handler_ != nullptr) {

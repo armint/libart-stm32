@@ -393,10 +393,11 @@ TEST_CASE("Stm32UsbDeviceController runs usb::Device through enumeration") {
   f.hardware.raise(inComplete(0x80));
   f.controller.poll();
 
+  const int closeAllBefore = f.hardware.closeAllCount;
   f.hardware.raise(setup({0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}));
   f.controller.poll();
   CHECK(device.state() == art::usb::DeviceState::Address);
-  CHECK(f.hardware.closeAllCount == 1);
+  CHECK(f.hardware.closeAllCount == closeAllBefore + 1);
 }
 
 TEST_CASE("Stm32UsbDeviceController ignores EP0 calls of a transfer that a "
@@ -457,4 +458,36 @@ TEST_CASE("Stm32UsbDeviceController ignores EP0 calls of a transfer that a "
     CHECK(handler.setups == 2);
     CHECK(f.controller.startInTransfer(0x80, {}));
   }
+}
+
+TEST_CASE("Stm32UsbDeviceController frees endpoints that a handler opened "
+          "during a reset") {
+  /// SET_CONFIGURATION handler that the reset interrupt interrupts.
+  class Configure : public RecordingEvents {
+  public:
+    hw::UsbDevice *hardware{nullptr};
+    Stm32UsbDeviceController *controller{nullptr};
+
+    void setupReceived(const art::usb::SetupPacket &packet) override {
+      RecordingEvents::setupReceived(packet);
+      hardware->raise(reset());
+      opened =
+          controller->openEndpoint({0x81, art::usb::EndpointType::Bulk, 64});
+    }
+    bool opened{false};
+  };
+
+  Fixture f;
+  f.openEp0();
+  Configure handler;
+  handler.hardware = &f.hardware;
+  handler.controller = &f.controller;
+  f.controller.setEventHandler(&handler);
+
+  f.hardware.raise(setup({0x00, 0x09, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00}));
+  f.controller.poll();
+  CHECK(handler.opened);
+  CHECK(handler.log == std::vector<std::string>{"setup", "reset"});
+  CHECK(f.hardware.closeAllCount == 1);
+  CHECK_FALSE(f.controller.startInTransfer(0x81, {}));
 }
