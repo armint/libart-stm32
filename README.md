@@ -54,3 +54,16 @@ into the queue.
   memory.
 - Reopening a closed endpoint with a different `wMaxPacketSize` fails while
   another endpoint other than EP0 is open.
+
+## Host tests
+
+`tests/` contains host tests with doctest. Stubs in `tests/stubs` replace the
+hardware and some libArT classes. The USB controller tests use the real
+libArT USB headers and `usb::Device`. They find libArT in `../libArT`, next to
+this repository. Set `LIBART_DIR` to use another libArT checkout:
+
+```sh
+cmake -S tests -B build-tests -D LIBART_DIR=/path/to/libArT
+cmake --build build-tests
+ctest --test-dir build-tests --output-on-failure
+```

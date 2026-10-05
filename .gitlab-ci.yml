@@ -3,6 +3,10 @@ stages:
 
 image: "docker.vandertogt.org/firmware-builder:v1.14.0"
 
+variables:
+  # libArT branch for the host tests (USB headers and usb::Device).
+  LIBART_REF: dev
+
 workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
@@ -11,8 +15,10 @@ workflow:
     - if: "$CI_COMMIT_BRANCH"
 
 # Runs the host-native unit tests under tests/ (doctest). These cover the
-# hardware-independent logic (currently power::PowerManager), without needing
-# a cross toolchain or the rest of the embedded dependency graph.
+# hardware-independent logic (power::PowerManager, SerialWritable and the USB
+# controller), without needing a cross toolchain. The USB controller tests use
+# the libArT USB headers and usb::Device from a libArT clone next to this
+# repository (tests/CMakeLists.txt, LIBART_DIR).
 #
 # This repo's embedded sources (art-stm32 proper) statically link
 # system-stm32 and are RTOS-agnostic. Building the full embedded target is
@@ -23,6 +29,11 @@ unit-tests:
   variables:
     GIT_DEPTH: 0
   script:
+    # The runner reuses its build directory between jobs, so drop a stale copy.
+    - rm -rf "${CI_PROJECT_DIR}/../libArT"
+    - git clone --depth 1 --branch "$LIBART_REF"
+      "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/embedded-libraries/libart.git"
+      "${CI_PROJECT_DIR}/../libArT"
     - cmake -S tests -B build-tests -G "Unix Makefiles" -D CMAKE_BUILD_TYPE=Release
     - cmake --build build-tests -j$(nproc)
     - ctest --test-dir build-tests --output-on-failure
