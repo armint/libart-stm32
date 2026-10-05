@@ -4,7 +4,7 @@ stages:
 image: "docker.vandertogt.org/firmware-builder:v1.14.0"
 
 variables:
-  # libArT branch for the host tests (USB headers and usb::Device).
+  # libArT branch for the host tests (USB stack and Readable).
   LIBART_REF: dev
 
 workflow:
@@ -15,9 +15,9 @@ workflow:
     - if: "$CI_COMMIT_BRANCH"
 
 # Runs the host-native unit tests under tests/ (doctest). These cover the
-# hardware-independent logic (power::PowerManager, SerialWritable and the USB
-# controller), without needing a cross toolchain. The USB controller tests use
-# the libArT USB headers and usb::Device from a libArT clone next to this
+# hardware-independent logic (power::PowerManager, SerialWritable, the USB
+# controller and UsbSerial), without needing a cross toolchain. The USB tests
+# use the libArT USB stack and Readable from a libArT clone next to this
 # repository (tests/CMakeLists.txt, LIBART_DIR).
 #
 # This repo's embedded sources (art-stm32 proper) statically link
