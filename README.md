@@ -85,6 +85,34 @@ If `droppedEvents()` increases, recover with a new enumeration:
 - Reopening a closed endpoint with a different `wMaxPacketSize` fails while
   another endpoint other than EP0 is open.
 
+## USB serial
+
+`usb/UsbSerial.h` is a `Readable` and a `Writable` on the CDC-ACM function of
+libArT (`art::usb::CdcAcmFunction`). It has the same API as `SerialReadable`
+and `SerialWritable`. Thus it can be the `LogManager` sink or the stream of a
+console.
+
+```cpp
+art::usb::CdcAcmFunction<256, 256> cdc(0, art::usb::CdcAcmEndpoints{ 0x81, 16, 0x02, 0x82 });
+UsbSerial usbSerial(cdc);
+usbDevice.addFunction(cdc);
+```
+
+Nothing in `UsbSerial` waits. The USB events arrive only through
+`Stm32UsbDeviceController::poll()` in the main loop, so a wait in the main
+loop cannot make progress.
+
+- `read()` returns `Readable::Timeout` at once if no byte is in the RX queue.
+- `write()` puts the data into the TX queue and drops the data that does not
+  fit. While no terminal has the port open, it drops all data. A terminal is
+  open when the host sets DTR and the device is configured. `write()` always
+  reports all bytes as written, so a logger does not stop on a full or closed
+  port. `droppedBytes()` counts the dropped bytes, and `resetDroppedBytes()`
+  sets the count to 0.
+- `flush()` returns at once. `poll()` sends the TX queue.
+- Call `UsbSerial` only from the main loop, the context that calls `poll()`.
+  The CDC-ACM function does no locking.
+
 ## Host tests
 
 `tests/` contains host tests with doctest. Stubs in `tests/stubs` replace the
