@@ -110,6 +110,16 @@ loop cannot make progress.
   port. `droppedBytes()` counts the dropped bytes, and `resetDroppedBytes()`
   sets the count to 0.
 - `flush()` returns at once. `poll()` sends the TX queue.
+- `write()` can cut a message: it sends the start that fits into the TX
+  queue and drops the end. A console that must not send a cut message checks
+  `writeAvailable()` for the full message size before it writes. If there is
+  not enough room, it tries again in a later main loop iteration.
+  `isTxIdle()` tells when the host has read all data.
+- The `Readable` helpers (`read(span)`, `readNumber()`, `readRLE()`,
+  `readUntil()`, `scanf()`) call `read()` for each byte. They stop at the
+  first `Timeout`, and the bytes that they took before are lost. Use them only
+  for data that is already in the RX queue: check `readAvailable()` first.
+  Otherwise, read byte by byte with `read()`.
 - Call `UsbSerial` only from the main loop, the context that calls `poll()`.
   The CDC-ACM function does no locking.
 

@@ -43,6 +43,17 @@
  *    it before the new data.
  *  - flush() returns at once. poll() sends the TX queue.
  *
+ * Message boundaries:
+ *  - write() can cut a message: it sends the start that fits and drops the
+ *    end. A console that must not send a cut message checks writeAvailable()
+ *    for the full message size before it writes, and waits for a later main
+ *    loop iteration if there is not enough room.
+ *  - The Readable helpers (read(span), readNumber(), readRLE(), readUntil(),
+ *    scanf()) call read() for each byte and stop at the first Timeout. The
+ *    bytes that they took before are lost. Use them only for data that is
+ *    already in the RX queue: check readAvailable() first. Otherwise read
+ *    byte by byte with read().
+ *
  * Threading: call it only from the main loop, the context that runs poll().
  * The CDC-ACM function does no locking.
  */
@@ -64,6 +75,27 @@ class UsbSerial : public Readable, public Writable {
    /// True if a terminal program on the host has the port open (DTR set).
    [[nodiscard]] bool isTerminalOpen() const {
       return function_.isTerminalOpen();
+   }
+
+   /**
+    * @brief The number of received bytes that read() can return without a
+    * Timeout. 0 while no terminal is open (the data is discarded then).
+    */
+   [[nodiscard]] size_t readAvailable() {
+      return acceptsInput() ? function_.readAvailable() : 0u;
+   }
+
+   /**
+    * @brief The number of bytes that the next write() takes without a drop.
+    * 0 while no terminal is open.
+    */
+   [[nodiscard]] size_t writeAvailable() const {
+      return function_.isTerminalOpen() ? function_.writeAvailable() : 0u;
+   }
+
+   /// True if the TX queue is empty and the host acknowledged the last packet.
+   [[nodiscard]] bool isTxIdle() const {
+      return function_.isTxIdle();
    }
 
    /// The number of bytes that write() dropped since construction or resetDroppedBytes().

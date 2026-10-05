@@ -301,3 +301,26 @@ TEST_CASE("UsbSerial reading makes room, so the host can send again") {
   }
   CHECK(bench.sendOut(packet));
 }
+
+TEST_CASE("UsbSerial reports the room and the data that are available") {
+  Bench bench;
+  CHECK(bench.serial.writeAvailable() == 0);
+  CHECK(bench.serial.readAvailable() == 0);
+
+  bench.enumerate();
+  CHECK(bench.serial.writeAvailable() == 0); // no terminal yet
+  bench.setDtr(true);
+  CHECK(bench.serial.writeAvailable() == 128);
+  CHECK(bench.serial.isTxIdle());
+
+  bench.serial.write(bytes("hello"));
+  CHECK(bench.serial.writeAvailable() == 123);
+  CHECK_FALSE(bench.serial.isTxIdle());
+  CHECK(bench.readTransfer() == "hello");
+  CHECK(bench.serial.isTxIdle());
+
+  REQUIRE(bench.sendOut("abc"));
+  CHECK(bench.serial.readAvailable() == 3);
+  bench.setDtr(false);
+  CHECK(bench.serial.readAvailable() == 0);
+}
