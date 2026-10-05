@@ -33,6 +33,10 @@
  *  - SET_ADDRESS: setAddress() only stores the address. The interrupt writes
  *    it to the hardware when the host acknowledges the status stage on EP0
  *    IN. A SETUP packet or a bus reset drops a stored address.
+ *  - New SETUP: the hardware sets EP0 to NAK. While that SETUP or a bus
+ *    reset waits in the queue, the controller ignores startInTransfer(),
+ *    armOutTransfer() and setEndpointStall() on EP0. They belong to the
+ *    aborted transfer before it.
  *  - Bus reset: hw::UsbDevice resets the endpoints in the interrupt. poll()
  *    drops the events that were queued before the reset, because they refer
  *    to endpoints and transfers that no longer exist.
@@ -121,6 +125,7 @@ class Stm32UsbDeviceController final : public art::usb::DeviceController {
    static void onInterruptEvent(void *context, const Event &event);
    void handleInterruptEvent(const Event &event);
    void deliver(const Event &event);
+   [[nodiscard]] bool isSupersededControlCall(uint8_t endpointAddress) const;
    [[nodiscard]] bool isOpen(uint8_t endpointAddress) const;
 };
 

@@ -385,3 +385,63 @@ TEST_CASE("Stm32UsbDeviceController runs usb::Device through enumeration") {
   CHECK(device.state() == art::usb::DeviceState::Address);
   CHECK(f.hardware.closeAllCount == 1);
 }
+
+TEST_CASE("Stm32UsbDeviceController ignores EP0 calls of a transfer that a "
+          "newer SETUP aborted") {
+  /// Handles SETUP A while SETUP B arrives, then answers A on EP0.
+  class AbortedTransfer : public RecordingEvents {
+  public:
+    hw::UsbDevice *hardware{nullptr};
+    Stm32UsbDeviceController *controller{nullptr};
+    bool newerEvent{true};
+    bool reset{false};
+    int setups{0};
+    bool started{false};
+
+    void setupReceived(const art::usb::SetupPacket &packet) override {
+      RecordingEvents::setupReceived(packet);
+      if (++setups > 1) {
+        return;
+      }
+      if (newerEvent) {
+        hardware->raise(reset ? ::reset() : setup(kGetDeviceDescriptor));
+      }
+      const std::array<uint8_t, 2> data{1, 2};
+      started = controller->startInTransfer(0x80, data);
+      controller->armOutTransfer(0x00);
+      controller->setEndpointStall(0x80, true);
+      controller->setEndpointStall(0x00, true);
+    }
+  };
+
+  Fixture f;
+  f.openEp0();
+  AbortedTransfer handler;
+  handler.hardware = &f.hardware;
+  handler.controller = &f.controller;
+  f.controller.setEventHandler(&handler);
+
+  SUBCASE("newer SETUP") {}
+  SUBCASE("reset") { handler.reset = true; }
+  SUBCASE("no newer event: control") { handler.newerEvent = false; }
+
+  f.hardware.raise(setup(kGetDeviceDescriptor));
+  f.controller.poll();
+  if (handler.newerEvent) {
+    CHECK_FALSE(handler.started);
+    CHECK(f.hardware.lastIn.empty());
+    CHECK(f.hardware.armedOut.empty());
+    CHECK(f.hardware.setStallCalls == 0);
+  } else {
+    CHECK(handler.started);
+    CHECK(f.hardware.lastIn.count(0x80) == 1);
+    CHECK(f.hardware.armedOut == std::vector<uint8_t>{0x00});
+    CHECK(f.hardware.setStallCalls == 2);
+  }
+
+  // The handler of SETUP B itself is not blocked.
+  if (!handler.reset && handler.newerEvent) {
+    CHECK(handler.setups == 2);
+    CHECK(f.controller.startInTransfer(0x80, {}));
+  }
+}

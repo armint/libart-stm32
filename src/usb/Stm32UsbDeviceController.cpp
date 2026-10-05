@@ -216,7 +216,7 @@ void Stm32UsbDeviceController::closeEndpoint(uint8_t endpointAddress) {
 }
 
 void Stm32UsbDeviceController::setEndpointStall(uint8_t endpointAddress, bool stall) {
-   if(!isOpen(endpointAddress)) {
+   if(!isOpen(endpointAddress) || isSupersededControlCall(endpointAddress)) {
       return;
    }
    device_.setStall(endpointAddress, stall);
@@ -235,17 +235,27 @@ void Stm32UsbDeviceController::setEndpointStall(uint8_t endpointAddress, bool st
 }
 
 bool Stm32UsbDeviceController::startInTransfer(uint8_t endpointAddress, art::span<const uint8_t> packet) {
-   if(!isInEndpoint(endpointAddress) || !isOpen(endpointAddress)) {
+   if(!isInEndpoint(endpointAddress) || !isOpen(endpointAddress) || isSupersededControlCall(endpointAddress)) {
       return false;
    }
    return device_.startIn(endpointAddress, packet);
 }
 
 void Stm32UsbDeviceController::armOutTransfer(uint8_t endpointAddress) {
-   if(isInEndpoint(endpointAddress) || !isOpen(endpointAddress)) {
+   if(isInEndpoint(endpointAddress) || !isOpen(endpointAddress) || isSupersededControlCall(endpointAddress)) {
       return;
    }
    static_cast<void>(device_.armOut(endpointAddress));
+}
+
+bool Stm32UsbDeviceController::isSupersededControlCall(uint8_t endpointAddress) const {
+   // The hardware sets EP0 to NAK when a SETUP packet arrives. While that
+   // SETUP (or a reset) waits in the queue, the protocol layer still works on
+   // the transfer before it. Its data, status or STALL must not undo the NAK
+   // and reach the new transfer. The handler of the newest SETUP is not
+   // blocked: poll() counts a SETUP as delivered before it calls the handler.
+   return endpointNumber(endpointAddress) == 0u && (setupsQueued_.load(std::memory_order_acquire) != setupsDelivered_ ||
+                                                    resetsQueued_.load(std::memory_order_acquire) != resetsDelivered_);
 }
 
 bool Stm32UsbDeviceController::isOpen(uint8_t endpointAddress) const {
