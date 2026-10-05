@@ -491,3 +491,79 @@ TEST_CASE("Stm32UsbDeviceController frees endpoints that a handler opened "
   CHECK(f.hardware.closeAllCount == 1);
   CHECK_FALSE(f.controller.startInTransfer(0x81, {}));
 }
+
+TEST_CASE("Stm32UsbDeviceController drops packet events of an endpoint that "
+          "was closed and opened again") {
+  Fixture f;
+  f.openEp0();
+  REQUIRE(f.controller.openEndpoint({0x01, art::usb::EndpointType::Bulk, 64}));
+  REQUIRE(f.controller.openEndpoint({0x02, art::usb::EndpointType::Bulk, 64}));
+  REQUIRE(f.controller.openEndpoint({0x82, art::usb::EndpointType::Bulk, 64}));
+  f.hardware.raise(out(0x02, 0));
+  f.hardware.raise(inComplete(0x82));
+  f.hardware.raise(out(0x01, 0));
+
+  // SET_INTERFACE on the interface of EP2.
+  f.controller.closeEndpoint(0x02);
+  f.controller.closeEndpoint(0x82);
+  REQUIRE(f.controller.openEndpoint({0x02, art::usb::EndpointType::Bulk, 64}));
+  REQUIRE(f.controller.openEndpoint({0x82, art::usb::EndpointType::Bulk, 64}));
+  f.hardware.raise(inComplete(0x82));
+
+  f.controller.poll();
+  CHECK(f.events.log == std::vector<std::string>{"out 1", "in 130"});
+}
+
+TEST_CASE("Stm32UsbDeviceController arms an OUT endpoint only after its "
+          "queued packet is delivered") {
+  /// Arms the endpoint again from the packet handler, as a function does.
+  class Rearm : public RecordingEvents {
+  public:
+    Stm32UsbDeviceController *controller{nullptr};
+    bool rearm{false};
+    void outPacketReceived(uint8_t ep,
+                           art::span<const uint8_t> packet) override {
+      RecordingEvents::outPacketReceived(ep, packet);
+      if (rearm) {
+        controller->armOutTransfer(ep);
+      }
+    }
+  };
+
+  Fixture f;
+  Rearm handler;
+  handler.controller = &f.controller;
+  f.controller.setEventHandler(&handler);
+  REQUIRE(f.controller.openEndpoint({0x02, art::usb::EndpointType::Bulk, 64}));
+
+  f.hardware.raise(out(0x02, 3));
+  f.hardware.outData[0x02] = {'a', 'b', 'c'};
+  // For example after CLEAR_FEATURE(ENDPOINT_HALT), before poll().
+  f.controller.armOutTransfer(0x02);
+  CHECK(f.hardware.armedOut.empty());
+
+  SUBCASE("the controller arms after delivery") {}
+  SUBCASE("the handler arms during delivery") { handler.rearm = true; }
+
+  f.controller.poll();
+  CHECK(handler.lastOut == std::vector<uint8_t>{'a', 'b', 'c'});
+  CHECK(f.hardware.armedOut == std::vector<uint8_t>{0x02});
+
+  // Nothing queued: armed at once.
+  f.controller.armOutTransfer(0x02);
+  CHECK(f.hardware.armedOut.size() == 2);
+}
+
+TEST_CASE("Stm32UsbDeviceController forgets a deferred arm when the endpoint "
+          "closes") {
+  Fixture f;
+  REQUIRE(f.controller.openEndpoint({0x01, art::usb::EndpointType::Bulk, 64}));
+  REQUIRE(f.controller.openEndpoint({0x02, art::usb::EndpointType::Bulk, 64}));
+  f.hardware.raise(out(0x02, 0));
+  f.controller.armOutTransfer(0x02);
+  f.controller.closeEndpoint(0x02);
+  REQUIRE(f.controller.openEndpoint({0x02, art::usb::EndpointType::Bulk, 64}));
+  f.controller.poll();
+  CHECK(f.events.log.empty());
+  CHECK(f.hardware.armedOut.empty());
+}

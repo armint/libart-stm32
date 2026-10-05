@@ -36,6 +36,15 @@ usbController.poll();
   host acknowledges the status stage. The main loop is too slow for this,
   because the host uses the new address 2 ms later.
 - After a bus reset, `poll()` drops the events that came before the reset.
+- While a new SETUP packet or a bus reset waits in the queue, the controller
+  ignores calls on EP0. They belong to the control transfer that the SETUP
+  packet or the reset aborted.
+- After `closeEndpoint()`, `poll()` drops the queued packet events of that
+  endpoint. They do not reach an endpoint that opens again with the same
+  address.
+- If an OUT packet of an endpoint waits in the queue, `armOutTransfer()` on
+  that endpoint takes effect only after `poll()` delivers the packet. Thus
+  the next packet cannot overwrite the packet in packet memory.
 
 ### Queue size
 

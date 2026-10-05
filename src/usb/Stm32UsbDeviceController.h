@@ -10,6 +10,7 @@
 #if __has_include(<UsbDevice.h>) && defined(USB_BASE)
 #define ART_STM32_HAS_USB_DEVICE_CONTROLLER 1
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 
@@ -40,6 +41,12 @@
  *  - Bus reset: hw::UsbDevice resets the endpoints in the interrupt. poll()
  *    drops the events that were queued before the reset, because they refer
  *    to endpoints and transfers that no longer exist.
+ *  - closeEndpoint(): poll() drops the packet events of the endpoint that
+ *    were queued before the close. They do not reach an endpoint that is
+ *    opened again with the same address.
+ *  - armOutTransfer() while an OUT packet of that endpoint waits in the
+ *    queue: the controller arms the endpoint only after poll() has delivered
+ *    the packet, because the next packet would overwrite it in packet memory.
  *
  * Port limits:
  *  - EP0 must have a bMaxPacketSize0 of 64 (hw::UsbDevice::Ep0MaxPacketSize).
@@ -121,12 +128,24 @@ class Stm32UsbDeviceController final : public art::usb::DeviceController {
    uint8_t resetsDelivered_ = 0u;
    uint8_t setupsDelivered_ = 0u;
    std::atomic<uint32_t> droppedEvents_{ 0u };
+   // Out and InComplete events per endpoint direction (OUT 0..7, IN 8..15).
+   std::array<std::atomic<uint8_t>, 2u * hw::UsbDevice::EndpointCount> packetsQueued_{};
+   std::array<uint8_t, 2u * hw::UsbDevice::EndpointCount> packetsDelivered_{};
+
+   // Main loop only. staleEvents_: packet events still queued when the
+   // endpoint was closed; poll() drops them. deferredArms_: OUT endpoints
+   // (bit per number) that armOutTransfer() arms after poll() has delivered
+   // their queued packet.
+   std::array<uint8_t, 2u * hw::UsbDevice::EndpointCount> staleEvents_{};
+   uint8_t deferredArms_ = 0u;
 
    static void onInterruptEvent(void *context, const Event &event);
    void handleInterruptEvent(const Event &event);
    void deliver(const Event &event);
    [[nodiscard]] bool isSupersededControlCall(uint8_t endpointAddress) const;
    [[nodiscard]] bool isOpen(uint8_t endpointAddress) const;
+   [[nodiscard]] bool isOutQueued(uint8_t endpointAddress) const;
+   void armDeferredOut(uint8_t endpointAddress);
 };
 
 #endif

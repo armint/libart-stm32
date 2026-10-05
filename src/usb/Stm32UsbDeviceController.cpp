@@ -12,6 +12,15 @@ using art::usb::isInEndpoint;
 constexpr uint8_t kEndpoint0In = 0x80u;
 constexpr uint8_t kEndpoint0Bit = 0x01u;
 
+// Index into the per-endpoint-direction arrays: OUT 0..7, IN 8..15.
+size_t slot(uint8_t endpointAddress) {
+   return endpointNumber(endpointAddress) + (isInEndpoint(endpointAddress) ? hw::UsbDevice::EndpointCount : 0u);
+}
+
+bool isPacketEvent(hw::usb::EventType type) {
+   return type == hw::usb::EventType::Out || type == hw::usb::EventType::InComplete;
+}
+
 hw::usb::EndpointType toHardware(art::usb::EndpointType type) {
    switch(type) {
    case art::usb::EndpointType::Control:
@@ -47,6 +56,12 @@ void Stm32UsbDeviceController::begin() {
    resetsDelivered_ = 0u;
    setupsDelivered_ = 0u;
    pendingAddress_.store(kNoAddress, std::memory_order_relaxed);
+   for(auto &counter : packetsQueued_) {
+      counter.store(0u, std::memory_order_relaxed);
+   }
+   packetsDelivered_.fill(0u);
+   staleEvents_.fill(0u);
+   deferredArms_ = 0u;
    openIn_ = 0u;
    openOut_ = 0u;
    device_.begin(&Stm32UsbDeviceController::onInterruptEvent, this);
@@ -97,6 +112,8 @@ void Stm32UsbDeviceController::handleInterruptEvent(const Event &event) {
       increment(resetsQueued_, std::memory_order_release);
    } else if(event.type == hw::usb::EventType::Setup) {
       increment(setupsQueued_, std::memory_order_release);
+   } else if(isPacketEvent(event.type)) {
+      increment(packetsQueued_[slot(event.endpoint)], std::memory_order_release);
    }
 }
 
@@ -115,6 +132,7 @@ void Stm32UsbDeviceController::deliver(const Event &event) {
       device_.closeAllEndpoints();
       openIn_ = 0u;
       openOut_ = 0u;
+      deferredArms_ = 0u;
       if(handler_ != nullptr) {
          handler_->busReset();
       }
@@ -122,6 +140,16 @@ void Stm32UsbDeviceController::deliver(const Event &event) {
    }
    if(event.type == hw::usb::EventType::Setup) {
       ++setupsDelivered_;
+   }
+   if(isPacketEvent(event.type)) {
+      const size_t index = slot(event.endpoint);
+      ++packetsDelivered_[index];
+      // Queued before closeEndpoint(): it belongs to the closed endpoint, not
+      // to an endpoint that was opened again with the same address.
+      if(staleEvents_[index] != 0u) {
+         --staleEvents_[index];
+         return;
+      }
    }
    if(beforeReset || handler_ == nullptr) {
       return;
@@ -136,6 +164,7 @@ void Stm32UsbDeviceController::deliver(const Event &event) {
          std::array<uint8_t, hw::UsbDevice::Ep0MaxPacketSize> packet{};
          const uint16_t size = device_.readOut(event.endpoint, packet);
          handler_->outPacketReceived(event.endpoint, art::span<const uint8_t>(packet.data(), size));
+         armDeferredOut(event.endpoint);
       }
       break;
    case hw::usb::EventType::InComplete:
@@ -206,6 +235,9 @@ void Stm32UsbDeviceController::closeEndpoint(uint8_t endpointAddress) {
       return;
    }
    const uint8_t number = endpointNumber(endpointAddress);
+   const size_t index = slot(endpointAddress);
+   staleEvents_[index] = static_cast<uint8_t>(packetsQueued_[index].load(std::memory_order_acquire) - packetsDelivered_[index]);
+   deferredArms_ &= static_cast<uint8_t>(~(1u << number));
    if(number == 0u) {
       openIn_ &= static_cast<uint8_t>(~kEndpoint0Bit);
       openOut_ &= static_cast<uint8_t>(~kEndpoint0Bit);
@@ -251,7 +283,29 @@ void Stm32UsbDeviceController::armOutTransfer(uint8_t endpointAddress) {
    if(isInEndpoint(endpointAddress) || !isOpen(endpointAddress) || isSupersededControlCall(endpointAddress)) {
       return;
    }
+   const uint8_t number = endpointNumber(endpointAddress);
+   // An OUT packet of this endpoint that waits in the queue is still in packet
+   // memory. The next packet would overwrite it, so arm only after poll() has
+   // delivered it.
+   if(number != 0u && isOutQueued(endpointAddress)) {
+      deferredArms_ |= static_cast<uint8_t>(1u << number);
+      return;
+   }
+   deferredArms_ &= static_cast<uint8_t>(~(1u << number));
    static_cast<void>(device_.armOut(endpointAddress));
+}
+
+bool Stm32UsbDeviceController::isOutQueued(uint8_t endpointAddress) const {
+   const size_t index = slot(endpointAddress);
+   return packetsQueued_[index].load(std::memory_order_acquire) != packetsDelivered_[index];
+}
+
+void Stm32UsbDeviceController::armDeferredOut(uint8_t endpointAddress) {
+   const uint8_t bit = static_cast<uint8_t>(1u << endpointNumber(endpointAddress));
+   if((deferredArms_ & bit) != 0u && !isOutQueued(endpointAddress)) {
+      deferredArms_ &= static_cast<uint8_t>(~bit);
+      static_cast<void>(device_.armOut(endpointAddress));
+   }
 }
 
 bool Stm32UsbDeviceController::isSupersededControlCall(uint8_t endpointAddress) const {
