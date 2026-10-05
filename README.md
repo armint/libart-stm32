@@ -85,12 +85,68 @@ If `droppedEvents()` increases, recover with a new enumeration:
 - Reopening a closed endpoint with a different `wMaxPacketSize` fails while
   another endpoint other than EP0 is open.
 
+## USB serial
+
+`usb/UsbSerial.h` is a `Readable` and a `Writable` on the CDC-ACM function of
+libArT (`art::usb::CdcAcmFunction`). It has the same API as `SerialReadable`
+and `SerialWritable`. Thus it can be the `LogManager` sink or the stream of a
+console.
+
+```cpp
+art::usb::CdcAcmFunction<256, 256> cdc(0, art::usb::CdcAcmEndpoints{ 0x81, 16, 0x02, 0x82 });
+UsbSerial usbSerial(cdc);
+usbDevice.addFunction(cdc);
+```
+
+Nothing in `UsbSerial` waits. The USB events arrive only through
+`Stm32UsbDeviceController::poll()` in the main loop, so a wait in the main
+loop cannot make progress.
+
+- `read()` returns `Readable::Timeout` at once if no byte is in the RX queue.
+- `write()` puts the data into the TX queue and drops the data that does not
+  fit. While no terminal has the port open, it drops all data. A terminal is
+  open when the host sets DTR and the device is configured. `write()` always
+  reports all bytes as written, so a logger does not stop on a full or closed
+  port. `droppedBytes()` counts the dropped bytes, and `resetDroppedBytes()`
+  sets the count to 0.
+- `flush()` returns at once. `poll()` sends the TX queue.
+- `write()` can cut a message: it sends the start that fits into the TX
+  queue and drops the end. A console that must not send a cut message checks
+  `writeAvailable()` for the full message size before it writes. If there is
+  not enough room, it tries again in a later main loop iteration.
+  `isTxIdle()` tells when the host has read all data.
+- The `Readable` helpers (`read(span)`, `readNumber()`, `readRLE()`,
+  `readUntil()`, `scanf()`) call `read()` for each byte. They stop at the
+  first `Timeout`, and the bytes that they took before are lost. Use them only
+  for data that is already in the RX queue: check `readAvailable()` first.
+  Otherwise, read byte by byte with `read()`.
+- Call `UsbSerial` only from the main loop, the context that calls `poll()`.
+  The CDC-ACM function does no locking.
+
+### Terminal sessions
+
+A terminal session starts when the host sets DTR. It ends when the host
+clears DTR. The CDC-ACM function does not clear its queues at the end of a
+session ([libart#48](https://gitlab.vandertogt.org/embedded-libraries/libart/-/issues/48)).
+`UsbSerial` handles the RX side, but not the TX side:
+
+- RX: while no terminal is open, `read()` and `available()` discard the
+  received data and report no data. Call one of them in each main loop
+  iteration. Then the data of an ended session does not reach the next
+  session. If the next session starts before such a call, its data comes
+  after the old data.
+- TX: data that `write()` put into the TX queue before the session ended,
+  and that the host did not read, stays in the TX queue. The next terminal
+  receives this data before the new data.
+
 ## Host tests
 
 `tests/` contains host tests with doctest. Stubs in `tests/stubs` replace the
-hardware and some libArT classes. The USB controller tests use the real
-libArT USB headers and `usb::Device`. They find libArT in `../libArT`, next to
-this repository. Set `LIBART_DIR` to use another libArT checkout:
+hardware and some libArT classes. The USB tests use the real libArT USB stack
+(`usb::Device`, `usb::CdcAcmFunction`), `Readable` and the fake controller of
+the libArT tests (`tests/usb/FakeDeviceController.h`). They find libArT in
+`../libArT`, next to this repository. CMake downloads doctest and ETL (the
+Embedded Template Library). Set `LIBART_DIR` to use another libArT checkout:
 
 ```sh
 cmake -S tests -B build-tests -D LIBART_DIR=/path/to/libArT
