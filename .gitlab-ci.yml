@@ -4,8 +4,11 @@ stages:
 image: "docker.vandertogt.org/firmware-builder:v1.14.0"
 
 variables:
-  # libArT branch for the host tests (USB stack and Readable).
+  # Branches of the dependencies that CI clones next to this repository.
   LIBART_REF: dev
+  SYSTEM_STM32_REF: dev
+  # One place for the toolchain location (as in system-stm32).
+  GCC_TOOLCHAIN_PREFIX: /opt/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi
 
 workflow:
   rules:
@@ -14,26 +17,99 @@ workflow:
       when: never
     - if: "$CI_COMMIT_BRANCH"
 
+# libArT, system-stm32 and span-compat are private repositories. Git gets the
+# CI job token from this credential helper, so no token is part of a URL or of
+# a file in the repository. Each repository must allow job tokens of this
+# project (CI/CD job token allowlist).
+.private-dependencies: &private-dependencies
+  - git config --global credential.https://${CI_SERVER_HOST}.helper
+      '!f() { echo username=gitlab-ci-token; echo "password=${CI_JOB_TOKEN}"; }; f'
+  # The runner reuses its build directory between jobs, so drop stale copies.
+  - rm -rf "${CI_PROJECT_DIR}/../libArT" "${CI_PROJECT_DIR}/../system-stm32"
+  # Full clones: the version of libArT and system-stm32 comes from git describe.
+  - git clone --branch "$LIBART_REF"
+      "https://${CI_SERVER_HOST}/embedded-libraries/libart.git" "${CI_PROJECT_DIR}/../libArT"
+  - git clone --branch "$SYSTEM_STM32_REF"
+      "https://${CI_SERVER_HOST}/embedded-libraries/system-stm32.git" "${CI_PROJECT_DIR}/../system-stm32"
+  # The refs follow dev. The log shows the commits of this run.
+  - git -C "${CI_PROJECT_DIR}/../libArT" log -1 --format='libArT %H %s'
+  - git -C "${CI_PROJECT_DIR}/../system-stm32" log -1 --format='system-stm32 %H %s'
+
 # Runs the host-native unit tests under tests/ (doctest). These cover the
 # hardware-independent logic (power::PowerManager, SerialWritable, the USB
 # controller and UsbSerial), without needing a cross toolchain. The USB tests
 # use the libArT USB stack and Readable from a libArT clone next to this
-# repository (tests/CMakeLists.txt, LIBART_DIR).
-#
-# This repo's embedded sources (art-stm32 proper) statically link
-# system-stm32 and are RTOS-agnostic. Building the full embedded target is
-# exercised by downstream projects (such as sentinode-ht), which build this
-# repo as a submodule.
+# repository (tests/CMakeLists.txt, LIBART_DIR). They run at C++23
+# (std::expected, std::span) and at C++17 (libArT's own expected, the span of
+# span-compat). The job checks that each build used that standard and type.
 unit-tests:
   stage: test
-  variables:
-    GIT_DEPTH: 0
+  parallel:
+    matrix:
+      - CXX_STANDARD: ["23", "17"]
+  before_script: *private-dependencies
   script:
-    # The runner reuses its build directory between jobs, so drop a stale copy.
-    - rm -rf "${CI_PROJECT_DIR}/../libArT"
-    - git clone --depth 1 --branch "$LIBART_REF"
-      "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/embedded-libraries/libart.git"
-      "${CI_PROJECT_DIR}/../libArT"
     - cmake -S tests -B build-tests -G "Unix Makefiles" -D CMAKE_BUILD_TYPE=Release
+        -D CMAKE_CXX_STANDARD=${CXX_STANDARD}
     - cmake --build build-tests -j$(nproc)
+    - |
+      flags=build-tests/CMakeFiles/art-stm32-tests.dir/flags.make
+      grep -q -- "-std=gnu++${CXX_STANDARD}" ${flags} || { echo "not built at C++${CXX_STANDARD}"; exit 1; }
+      if [ "${CXX_STANDARD}" = 23 ]; then
+        grep -q "ART_USE_STD_EXPECTED_SPAN=1" ${flags} || { echo "ART_USE_STD_EXPECTED_SPAN is not 1"; exit 1; }
+      else
+        grep -q "ART_USE_STD_EXPECTED_SPAN=0" ${flags} || { echo "ART_USE_STD_EXPECTED_SPAN is not 0"; exit 1; }
+        grep -q "SPAN_COMPAT_USE_STD_SPAN=0" ${flags} || { echo "span-compat does not use its own span"; exit 1; }
+      fi
     - ctest --test-dir build-tests --output-on-failure
+
+# The families of the firmware projects that use this library.
+.family-matrix: &family-matrix
+  - STM32_FAMILY: STM32L0
+    STM32_DEVICE: STM32L073xx
+    CXX_STANDARD: ["23", "17"]
+  - STM32_FAMILY: STM32G0
+    STM32_DEVICE: STM32G071xx
+    CXX_STANDARD: ["23", "17"]
+  - STM32_FAMILY: STM32G0
+    STM32_DEVICE: STM32G0B1xx
+    CXX_STANDARD: ["23", "17"]
+
+# Cross-builds art-stm32 with libArT and system-stm32 for each family, at
+# C++23 (ART_USE_STD_EXPECTED_SPAN=1) and at C++17 (=0), through the CI
+# superproject in ci/. The sources of this repository compile with
+# -Wall -Wextra -Wpedantic -Werror. ci/cross-build.sh fails if the build did
+# not use the intended standard, or if art::span and hw::span are not the
+# span type of that standard (ci/SpanTypeCheck.cpp).
+cross-build:
+  stage: test
+  parallel:
+    matrix: *family-matrix
+  before_script: *private-dependencies
+  script:
+    - ci/cross-build.sh
+
+# STM32C0 does not build yet, at both standards, because of known gaps:
+#  - system-stm32 does not build for C0 (embedded-libraries/system-stm32#27).
+#    The job builds it, ignores the result and prints a NOTE when it builds
+#    (SYSTEM_STM32_KNOWN_GAP).
+#  - src/sensors/InternalTemperatureSensor.cpp needs a temperature sensor
+#    calibration that system-stm32 does not have for C0 (libart-stm32#19).
+#    It may fail only with the errors in KNOWN_GAP_PATTERN.
+# The job is blocking. All other sources of art-stm32 and the span type check
+# must compile. The job prints a NOTE when a gap is fixed. Then remove the gap
+# here, and move C0 into the family matrix when both gaps are fixed.
+cross-build-c0:
+  stage: test
+  variables:
+    STM32_FAMILY: STM32C0
+    STM32_DEVICE: STM32C031xx
+    SYSTEM_STM32_KNOWN_GAP: "1"
+    KNOWN_GAPS: sensors/InternalTemperatureSensor.cpp
+    KNOWN_GAP_PATTERN: "'TemperatureSensorCalibration' in 'struct Adc' does not name a type|'Cal' has not been declared"
+  parallel:
+    matrix:
+      - CXX_STANDARD: ["23", "17"]
+  before_script: *private-dependencies
+  script:
+    - ci/cross-build.sh

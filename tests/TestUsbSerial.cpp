@@ -116,7 +116,7 @@ private:
   Device device_;
 };
 
-std::span<const uint8_t> bytes(const std::string &text) {
+art::span<const uint8_t> bytes(const std::string &text) {
   return {reinterpret_cast<const uint8_t *>(text.data()), text.size()};
 }
 
@@ -222,7 +222,7 @@ TEST_CASE("UsbSerial discards received data while no terminal is open") {
   CHECK_FALSE(bench.serial.available());
   REQUIRE(bench.sendOut("new"));
   std::array<char, 3> data{};
-  REQUIRE(bench.serial.read(std::span<char>(data)).has_value());
+  REQUIRE(bench.serial.read(art::span<char>(data)).has_value());
   CHECK(std::string(data.begin(), data.end()) == "new");
   CHECK_FALSE(bench.serial.available());
 }
@@ -239,7 +239,7 @@ TEST_CASE("UsbSerial keeps old data when a session ends between two calls "
     bench.setDtr(true);
     REQUIRE(bench.sendOut("new"));
     std::array<char, 6> data{};
-    REQUIRE(bench.serial.read(std::span<char>(data)).has_value());
+    REQUIRE(bench.serial.read(art::span<char>(data)).has_value());
     CHECK(std::string(data.begin(), data.end()) == "oldnew");
   }
   SUBCASE("TX: data that the host did not read goes to the next terminal") {
@@ -274,7 +274,7 @@ TEST_CASE("UsbSerial reads what the host sent") {
   CHECK(*first == 'a');
 
   std::array<char, 2> rest{};
-  auto count = bench.serial.read(std::span<char>(rest));
+  auto count = bench.serial.read(art::span<char>(rest));
   REQUIRE(count.has_value());
   CHECK(*count == 2);
   CHECK(rest == std::array<char, 2>{'b', 'c'});

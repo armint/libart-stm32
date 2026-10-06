@@ -2,6 +2,38 @@
 
 LibArT implementations specifically for stm32 targets
 
+## Language standard
+
+The minimum standard is C++17. The firmware projects use C++23. The library
+does not select a standard. The consumer sets it with `CMAKE_CXX_STANDARD`.
+
+The standard selects the types of `art::expected` and `art::span` (libArT,
+`utils/compat/`) through the libArT option `ART_USE_STD_EXPECTED_SPAN`:
+
+| Standard | `ART_USE_STD_EXPECTED_SPAN` | `art::expected` | `art::span` and `hw::span` |
+|---|---|---|---|
+| C++23 | `ON` (1), the default | `std::expected` | `std::span` |
+| C++17 | `OFF` (0) | libArT's own expected | `span_compat::span` |
+
+At C++17, the library needs span-compat (`embedded-libraries/span-compat`).
+It gets span-compat through libArT (`art::core`) and system-stm32. This
+library has no CMake setting for span-compat. span-compat must use its own
+span (`SPAN_COMPAT_USE_STD_SPAN=OFF`). libArT and system-stm32 set this value
+when they fetch span-compat.
+
+All libraries in one build must use the same `ART_USE_STD_EXPECTED_SPAN`
+value. This applies to libArT, libArT-proto, system-stm32, this library and
+the application. `Readable` and `Writable` have virtual functions that use
+these types. Thus a mixed build violates the one-definition rule, and the
+compiler does not report it. `art-core` exports the value as a public compile
+definition. Do not define it in a source file.
+
+system-stm32 selects `hw::span` from `CMAKE_CXX_STANDARD`, not from
+`ART_USE_STD_EXPECTED_SPAN`. Thus do not use C++20 or C++23 with
+`ART_USE_STD_EXPECTED_SPAN=OFF`. Always set `CMAKE_CXX_STANDARD`. Otherwise,
+`art::span` and `hw::span` can be different types. `Stm32UsbDeviceController.h`
+has a `static_assert` that stops such a build.
+
 ## USB device controller
 
 `usb/Stm32UsbDeviceController.h` connects the USB device stack of libArT to
@@ -153,3 +185,42 @@ cmake -S tests -B build-tests -D LIBART_DIR=/path/to/libArT
 cmake --build build-tests
 ctest --test-dir build-tests --output-on-failure
 ```
+
+The tests use C++23. Add `-D CMAKE_CXX_STANDARD=17` to run them at C++17.
+Then CMake also downloads span-compat, at the version that libArT specifies.
+
+## Continuous integration
+
+The CI pipeline (`.gitlab-ci.yml`) clones libArT and system-stm32 (branch
+`dev`) next to this repository. It has these jobs:
+
+- `unit-tests`: the host tests at C++23 and at C++17.
+- `cross-build`: a build of `art-stm32` for STM32L073xx, STM32G071xx and
+  STM32G0B1xx, at C++23 and at C++17. The sources of this repository must
+  compile with `-Wall -Wextra -Wpedantic -Werror`.
+- `cross-build-c0`: the same build for STM32C031xx. Two known gaps prevent a
+  full build:
+  [system-stm32#27](https://gitlab.vandertogt.org/embedded-libraries/system-stm32/-/issues/27)
+  (system-stm32 does not build for C0) and
+  [#19](https://gitlab.vandertogt.org/embedded-libraries/libart-stm32/-/issues/19)
+  (`InternalTemperatureSensor.cpp`). `InternalTemperatureSensor.cpp` can fail
+  only with the known errors (`KNOWN_GAP_PATTERN`). The job fails if this file
+  fails with another error, or if another source of `art-stm32` does not
+  compile. The job prints a note when a gap is fixed.
+
+The CI pipeline uses the latest `dev` commit of libArT and system-stm32. The
+job log shows the commits that it used.
+
+Each job checks that the build used the intended standard and span type.
+`ci/SpanTypeCheck.cpp` checks the types at compile time.
+
+`ci/cross-build.sh` runs a cross build locally, with libArT and system-stm32
+next to this repository. The build directory is `build-ci/`:
+
+```sh
+STM32_FAMILY=STM32L0 STM32_DEVICE=STM32L073xx CXX_STANDARD=17 \
+GCC_TOOLCHAIN_PREFIX=/opt/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi \
+ci/cross-build.sh
+```
+
+The script header describes the other variables.
