@@ -23,7 +23,10 @@ if (NOT DEFINED PROJECT_NAME)
     project(art-stm32-tests C CXX)
 endif ()
 
-set(CMAKE_CXX_STANDARD 23)
+# C++23 by default. CI also runs the tests at C++17 (-D CMAKE_CXX_STANDARD=17).
+if (NOT DEFINED CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 23)
+endif ()
 
 include(CTest)
 
@@ -67,5 +70,25 @@ target_link_libraries(art-stm32-tests PRIVATE
     doctest::doctest
     etl::etl
 )
+
+# The tests compile the libArT sources directly, without the art-core target. So
+# they set ART_USE_STD_EXPECTED_SPAN as art-core does: 1 (std::expected and
+# std::span) at C++23, 0 (libArT's own expected and the span of span-compat)
+# below. span-compat comes from the pin of libArT, with its own span
+# (SPAN_COMPAT_USE_STD_SPAN=0).
+if (CMAKE_CXX_STANDARD LESS 23)
+    include("${LIBART_DIR}/cmake/span-compat.cmake")
+    set(SPAN_COMPAT_USE_STD_SPAN OFF CACHE STRING "Span type of span-compat: AUTO, ON (std::span) or OFF (own)")
+    FetchContent_Declare(
+        span_compat
+        GIT_REPOSITORY ${ART_SPAN_COMPAT_GIT_REPOSITORY}
+        GIT_TAG ${ART_SPAN_COMPAT_GIT_TAG}
+    )
+    FetchContent_MakeAvailable(span_compat)
+    target_link_libraries(art-stm32-tests PRIVATE span-compat::span-compat)
+    target_compile_definitions(art-stm32-tests PRIVATE ART_USE_STD_EXPECTED_SPAN=0)
+else ()
+    target_compile_definitions(art-stm32-tests PRIVATE ART_USE_STD_EXPECTED_SPAN=1)
+endif ()
 
 add_test(NAME art-stm32-tests COMMAND art-stm32-tests)
