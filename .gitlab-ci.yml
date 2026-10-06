@@ -31,6 +31,9 @@ workflow:
       "https://${CI_SERVER_HOST}/embedded-libraries/libart.git" "${CI_PROJECT_DIR}/../libArT"
   - git clone --branch "$SYSTEM_STM32_REF"
       "https://${CI_SERVER_HOST}/embedded-libraries/system-stm32.git" "${CI_PROJECT_DIR}/../system-stm32"
+  # The refs follow dev. The log shows the commits of this run.
+  - git -C "${CI_PROJECT_DIR}/../libArT" log -1 --format='libArT %H %s'
+  - git -C "${CI_PROJECT_DIR}/../system-stm32" log -1 --format='system-stm32 %H %s'
 
 # Runs the host-native unit tests under tests/ (doctest). These cover the
 # hardware-independent logic (power::PowerManager, SerialWritable, the USB

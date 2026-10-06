@@ -208,6 +208,9 @@ The CI pipeline (`.gitlab-ci.yml`) clones libArT and system-stm32 (branch
   fails with another error, or if another source of `art-stm32` does not
   compile. The job prints a note when a gap is fixed.
 
+The CI pipeline uses the latest `dev` commit of libArT and system-stm32. The
+job log shows the commits that it used.
+
 Each job checks that the build used the intended standard and span type.
 `ci/SpanTypeCheck.cpp` checks the types at compile time.
 
