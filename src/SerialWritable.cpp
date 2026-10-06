@@ -181,7 +181,7 @@ art::expected<void, Writable::Error> SerialWritable::flush() {
 }
 
 art::expected<size_t, Writable::Error>
-SerialWritable::writeUnlocked(std::span<const uint8_t> data, bool blocking) {
+SerialWritable::writeUnlocked(art::span<const uint8_t> data, bool blocking) {
   for (size_t i = 0; i < data.size(); i++) {
     uint8_t c = data[i];
     if (txBuffer.full()) {
@@ -206,7 +206,7 @@ SerialWritable::writeUnlocked(std::span<const uint8_t> data, bool blocking) {
 }
 
 art::expected<size_t, Writable::Error>
-SerialWritable::write(std::span<const uint8_t> data) {
+SerialWritable::write(art::span<const uint8_t> data) {
   std::optional<std::lock_guard<SerialTxSync>> guard;
   if (shouldSelfLock()) {
     guard.emplace(*txSync_);

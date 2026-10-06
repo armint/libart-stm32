@@ -21,7 +21,7 @@ static art::expected<void, I2cError> waitIdle(const hw::I2c &i2c) {
 // ---------------------------------------------------------------------------
 
 art::expected<void, I2cError> I2cMaster::write(uint8_t address,
-                                                std::span<const uint8_t> data) const {
+                                                art::span<const uint8_t> data) const {
    if(auto r = waitIdle(i2c_); !r)
       return r;
 
@@ -76,7 +76,7 @@ art::expected<void, I2cError> I2cMaster::write(uint8_t address,
 }
 
 art::expected<void, I2cError> I2cMaster::read(uint8_t address,
-                                               std::span<uint8_t> data) const {
+                                               art::span<uint8_t> data) const {
    if(auto r = waitIdle(i2c_); !r)
       return r;
 
@@ -123,8 +123,8 @@ art::expected<void, I2cError> I2cMaster::read(uint8_t address,
 }
 
 art::expected<void, I2cError> I2cMaster::writeRead(uint8_t address,
-                                                    std::span<const uint8_t> writeData,
-                                                    std::span<uint8_t> readData) const {
+                                                    art::span<const uint8_t> writeData,
+                                                    art::span<uint8_t> readData) const {
    if(auto r = waitIdle(i2c_); !r)
       return r;
 
