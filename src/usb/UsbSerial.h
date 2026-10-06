@@ -7,7 +7,7 @@
 
 #include <cstdint>
 #include <utils/compat/expected.h>
-#include <span>
+#include <utils/compat/span.h>
 
 #include <streams/Readable.h>
 #include <streams/Writable.h>
@@ -69,7 +69,7 @@ class UsbSerial : public Readable, public Writable {
    bool available() override;
 
    // Writable
-   art::expected<size_t, Writable::Error> write(std::span<const uint8_t> data) override;
+   art::expected<size_t, Writable::Error> write(art::span<const uint8_t> data) override;
    art::expected<void, Writable::Error> flush() override;
 
    /// True if a terminal program on the host has the port open (DTR set).

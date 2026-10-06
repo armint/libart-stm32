@@ -2,7 +2,7 @@
 
 #include <utils/compat/expected.h>
 #include <optional>
-#include <span>
+#include <utils/compat/span.h>
 
 #include <utils/RingBuffer.h>
 
@@ -61,7 +61,7 @@ protected:
   art::expected<void, Error> flushUnlocked(size_t count, bool blocking);
   art::expected<void, Error> flushPolled(size_t count);
   art::expected<void, Error> flushInterruptDriven(size_t count);
-  art::expected<size_t, Error> writeUnlocked(std::span<const uint8_t> data,
+  art::expected<size_t, Error> writeUnlocked(art::span<const uint8_t> data,
                                              bool blocking);
   void releaseOrArmTransferComplete();
 
@@ -85,7 +85,7 @@ public:
                  SerialTxSync *txSync = nullptr, size_t txLowWater = 0);
   ~SerialWritable() override;
 
-  art::expected<size_t, Error> write(std::span<const uint8_t> data) override;
+  art::expected<size_t, Error> write(art::span<const uint8_t> data) override;
   art::expected<void, Error> flush() override;
 
   // To be called from the device ISR

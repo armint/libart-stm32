@@ -5,7 +5,7 @@
 #include <array>
 #include <cstdint>
 #include <map>
-#include <span>
+#include "utils/Span.h"
 #include <vector>
 
 // The real header is empty unless the CMSIS device header defines USB_BASE.
@@ -79,7 +79,7 @@ public:
 
   void closeAllEndpoints() { ++closeAllCount; }
 
-  [[nodiscard]] bool startIn(uint8_t ep, std::span<const uint8_t> data) {
+  [[nodiscard]] bool startIn(uint8_t ep, hw::span<const uint8_t> data) {
     if (!startInResult) {
       return false;
     }
@@ -95,7 +95,7 @@ public:
     return true;
   }
 
-  uint16_t readOut(uint8_t ep, std::span<uint8_t> buffer) const {
+  uint16_t readOut(uint8_t ep, hw::span<uint8_t> buffer) const {
     auto it = outData.find(ep);
     if (it == outData.end()) {
       return 0;

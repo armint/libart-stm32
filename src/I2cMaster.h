@@ -3,7 +3,7 @@
 #include <cmsis_device.h>
 #include <utils/compat/expected.h>
 #include <peripherals/I2c.h>
-#include <span>
+#include <utils/compat/span.h>
 
 enum class I2cError : uint8_t {
    Nack,
@@ -31,17 +31,17 @@ public:
 
    /** Write bytes to a 7-bit addressed device. */
    art::expected<void, I2cError> write(uint8_t address,
-                                       std::span<const uint8_t> data) const;
+                                       art::span<const uint8_t> data) const;
 
    /** Read bytes from a 7-bit addressed device. */
    art::expected<void, I2cError> read(uint8_t address,
-                                      std::span<uint8_t> data) const;
+                                      art::span<uint8_t> data) const;
 
    /**
     * Write then read without releasing the bus between the two phases
     * (repeated-START).
     */
    art::expected<void, I2cError> writeRead(uint8_t address,
-                                           std::span<const uint8_t> writeData,
-                                           std::span<uint8_t> readData) const;
+                                           art::span<const uint8_t> writeData,
+                                           art::span<uint8_t> readData) const;
 };

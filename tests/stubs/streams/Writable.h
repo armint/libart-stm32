@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <utils/compat/expected.h>
-#include <span>
+#include <utils/compat/span.h>
 
 /**
  * Minimal stand-in for libArT's Writable: only the parts SerialWritable
@@ -28,7 +28,7 @@ public:
   Writable() = default;
   virtual ~Writable() = default;
 
-  virtual art::expected<size_t, Error> write(std::span<const uint8_t> data) = 0;
+  virtual art::expected<size_t, Error> write(art::span<const uint8_t> data) = 0;
   virtual art::expected<void, Error> flush() = 0;
 
   /**
