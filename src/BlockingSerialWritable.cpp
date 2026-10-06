@@ -8,7 +8,7 @@ void BlockingSerialWritable::initialize(uint32_t baudRate) {
    uart_.enable();
 }
 
-std::expected<size_t, Writable::Error> BlockingSerialWritable::write(std::span<const uint8_t> data) {
+art::expected<size_t, Writable::Error> BlockingSerialWritable::write(std::span<const uint8_t> data) {
    for(auto byte : data) {
       while(!uart_.isTxRegisterEmpty()) {
       }
@@ -17,7 +17,7 @@ std::expected<size_t, Writable::Error> BlockingSerialWritable::write(std::span<c
    return data.size();
 }
 
-std::expected<void, Writable::Error> BlockingSerialWritable::flush() {
+art::expected<void, Writable::Error> BlockingSerialWritable::flush() {
    while(!uart_.isTxRegisterEmpty() || !uart_.isTransferComplete()) {
    }
    return {};

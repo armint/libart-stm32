@@ -49,7 +49,7 @@ void SerialWritable::releaseOrArmTransferComplete() {
   }
 }
 
-std::expected<void, Writable::Error> SerialWritable::flushPolled(size_t count) {
+art::expected<void, Writable::Error> SerialWritable::flushPolled(size_t count) {
   {
     Interrupt::CriticalSection cs;
     uart_.disableTxEmptyInterrupt();
@@ -78,7 +78,7 @@ std::expected<void, Writable::Error> SerialWritable::flushPolled(size_t count) {
   }
   if (timedOut || timeout.hasExpired()) {
     txSleepLock_.reset();
-    return std::unexpected(CouldNotWrite);
+    return art::unexpected(CouldNotWrite);
   }
   if (!txBuffer.empty()) {
     Interrupt::CriticalSection cs;
@@ -92,7 +92,7 @@ std::expected<void, Writable::Error> SerialWritable::flushPolled(size_t count) {
   return {};
 }
 
-std::expected<void, Writable::Error>
+art::expected<void, Writable::Error>
 SerialWritable::flushInterruptDriven(size_t count) {
   utils::Timeout timeout(FLUSH_TIMEOUT_MS);
   const size_t pending = txBuffer.size();
@@ -144,7 +144,7 @@ SerialWritable::flushInterruptDriven(size_t count) {
     uart_.disableTxEmptyInterrupt();
     uart_.disableTxCompleteInterrupt();
     txSleepLock_.reset();
-    return std::unexpected(CouldNotWrite);
+    return art::unexpected(CouldNotWrite);
   }
   if (txBuffer.empty()) {
     releaseOrArmTransferComplete();
@@ -152,7 +152,7 @@ SerialWritable::flushInterruptDriven(size_t count) {
   return {};
 }
 
-std::expected<void, Writable::Error>
+art::expected<void, Writable::Error>
 SerialWritable::flushUnlocked(size_t count, bool blocking) {
   if (blocking) {
     return flushInterruptDriven(count);
@@ -172,7 +172,7 @@ void SerialWritable::endWriteSession() noexcept {
   }
 }
 
-std::expected<void, Writable::Error> SerialWritable::flush() {
+art::expected<void, Writable::Error> SerialWritable::flush() {
   std::optional<std::lock_guard<SerialTxSync>> guard;
   if (shouldSelfLock()) {
     guard.emplace(*txSync_);
@@ -180,18 +180,18 @@ std::expected<void, Writable::Error> SerialWritable::flush() {
   return flushUnlocked(txBuffer.size(), canBlock());
 }
 
-std::expected<size_t, Writable::Error>
+art::expected<size_t, Writable::Error>
 SerialWritable::writeUnlocked(std::span<const uint8_t> data, bool blocking) {
   for (size_t i = 0; i < data.size(); i++) {
     uint8_t c = data[i];
     if (txBuffer.full()) {
       auto res = flushUnlocked(1, blocking);
       if (!res) {
-        return std::unexpected(res.error());
+        return art::unexpected(res.error());
       }
     }
     if (!txBuffer.try_push(c)) {
-      return std::unexpected(CouldNotWrite);
+      return art::unexpected(CouldNotWrite);
     }
   }
   if (!txBuffer.empty()) {
@@ -205,7 +205,7 @@ SerialWritable::writeUnlocked(std::span<const uint8_t> data, bool blocking) {
   return data.size();
 }
 
-std::expected<size_t, Writable::Error>
+art::expected<size_t, Writable::Error>
 SerialWritable::write(std::span<const uint8_t> data) {
   std::optional<std::lock_guard<SerialTxSync>> guard;
   if (shouldSelfLock()) {

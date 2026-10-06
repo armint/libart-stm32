@@ -1,6 +1,6 @@
 #pragma once
 
-#include <expected>
+#include <utils/compat/expected.h>
 #include <span>
 
 #include <utils/RingBuffer.h>
@@ -31,7 +31,7 @@ class SerialReadable : public BufferedReadable {
                             RingBufferBase<uint16_t> *breakBuffer = nullptr);
    ~SerialReadable() override = default;
 
-   std::expected<char, Error> read() override;
+   art::expected<char, Error> read() override;
    bool available() override;
 
    void set_read_timeout(uint32_t timeout) {

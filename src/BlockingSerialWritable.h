@@ -19,6 +19,6 @@ class BlockingSerialWritable : public Writable {
 
    void initialize(uint32_t baudRate = 115200);
 
-   std::expected<size_t, Error> write(std::span<const uint8_t> data) override;
-   std::expected<void, Error> flush() override;
+   art::expected<size_t, Error> write(std::span<const uint8_t> data) override;
+   art::expected<void, Error> flush() override;
 };

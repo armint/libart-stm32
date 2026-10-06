@@ -2,7 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <expected>
+#include <utils/compat/expected.h>
 #include <span>
 
 /**
@@ -28,8 +28,8 @@ public:
   Writable() = default;
   virtual ~Writable() = default;
 
-  virtual std::expected<size_t, Error> write(std::span<const uint8_t> data) = 0;
-  virtual std::expected<void, Error> flush() = 0;
+  virtual art::expected<size_t, Error> write(std::span<const uint8_t> data) = 0;
+  virtual art::expected<void, Error> flush() = 0;
 
   /**
    * RAII scope bracketing a sequence of write()/printf() calls. Nests: a
