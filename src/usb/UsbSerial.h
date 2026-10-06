@@ -6,7 +6,7 @@
 #define ART_STM32_HAS_USB_SERIAL 1
 
 #include <cstdint>
-#include <expected>
+#include <utils/compat/expected.h>
 #include <span>
 
 #include <streams/Readable.h>
@@ -65,12 +65,12 @@ class UsbSerial : public Readable, public Writable {
    using Writable::write;
 
    // Readable
-   std::expected<char, Readable::Error> read() override;
+   art::expected<char, Readable::Error> read() override;
    bool available() override;
 
    // Writable
-   std::expected<size_t, Writable::Error> write(std::span<const uint8_t> data) override;
-   std::expected<void, Writable::Error> flush() override;
+   art::expected<size_t, Writable::Error> write(std::span<const uint8_t> data) override;
+   art::expected<void, Writable::Error> flush() override;
 
    /// True if a terminal program on the host has the port open (DTR set).
    [[nodiscard]] bool isTerminalOpen() const {

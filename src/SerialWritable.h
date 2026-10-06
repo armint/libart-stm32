@@ -1,6 +1,6 @@
 #pragma once
 
-#include <expected>
+#include <utils/compat/expected.h>
 #include <optional>
 #include <span>
 
@@ -58,10 +58,10 @@ protected:
     return canBlock() && !txSync_->heldByCaller();
   }
 
-  std::expected<void, Error> flushUnlocked(size_t count, bool blocking);
-  std::expected<void, Error> flushPolled(size_t count);
-  std::expected<void, Error> flushInterruptDriven(size_t count);
-  std::expected<size_t, Error> writeUnlocked(std::span<const uint8_t> data,
+  art::expected<void, Error> flushUnlocked(size_t count, bool blocking);
+  art::expected<void, Error> flushPolled(size_t count);
+  art::expected<void, Error> flushInterruptDriven(size_t count);
+  art::expected<size_t, Error> writeUnlocked(std::span<const uint8_t> data,
                                              bool blocking);
   void releaseOrArmTransferComplete();
 
@@ -85,8 +85,8 @@ public:
                  SerialTxSync *txSync = nullptr, size_t txLowWater = 0);
   ~SerialWritable() override;
 
-  std::expected<size_t, Error> write(std::span<const uint8_t> data) override;
-  std::expected<void, Error> flush() override;
+  art::expected<size_t, Error> write(std::span<const uint8_t> data) override;
+  art::expected<void, Error> flush() override;
 
   // To be called from the device ISR
   void handleTxInterrupt();

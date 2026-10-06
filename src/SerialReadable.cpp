@@ -10,7 +10,7 @@ SerialReadable::SerialReadable(Usart &uart, RingBufferBase<uint8_t> &rx,
    , messageEndPositions_(messageEndBuffer)
    , breakPositions_(breakBuffer) {}
 
-std::expected<char, Readable::Error> SerialReadable::read() {
+art::expected<char, Readable::Error> SerialReadable::read() {
    if(rxBuffer.empty()) {
       utils::Timeout timeout(read_timeout);
       while(rxBuffer.empty() && !timeout) {
@@ -18,7 +18,7 @@ std::expected<char, Readable::Error> SerialReadable::read() {
       }
    }
    if(rxBuffer.empty()) {
-      return std::unexpected(Timeout);
+      return art::unexpected(Timeout);
    }
 
    // Check for message end (receiver timeout) at this position
@@ -27,7 +27,7 @@ std::expected<char, Readable::Error> SerialReadable::read() {
       if(messageEndPositions_->peek(pos) && pos == readPos_) {
          uint16_t discarded = 0;
          static_cast<void>(messageEndPositions_->try_pop(discarded));
-         return std::unexpected(EndOfMessage);
+         return art::unexpected(EndOfMessage);
       }
    }
 
@@ -40,7 +40,7 @@ std::expected<char, Readable::Error> SerialReadable::read() {
          uint8_t b = 0;
          static_cast<void>(rxBuffer.try_pop(b));
          readPos_++;
-         return std::unexpected(Break);
+         return art::unexpected(Break);
       }
    }
 

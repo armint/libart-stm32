@@ -8,10 +8,10 @@ UsbSerial::UsbSerial(art::usb::CdcAcmFunctionBase &function)
    : function_(function) {
 }
 
-std::expected<char, Readable::Error> UsbSerial::read() {
+art::expected<char, Readable::Error> UsbSerial::read() {
    uint8_t byte = 0u;
    if(!acceptsInput() || function_.read(std::span<uint8_t>(&byte, 1u)) == 0u) {
-      return std::unexpected(Readable::Timeout);
+      return art::unexpected(Readable::Timeout);
    }
    return static_cast<char>(byte);
 }
@@ -33,14 +33,14 @@ bool UsbSerial::acceptsInput() {
    return false;
 }
 
-std::expected<size_t, Writable::Error> UsbSerial::write(std::span<const uint8_t> data) {
+art::expected<size_t, Writable::Error> UsbSerial::write(std::span<const uint8_t> data) {
    // isTerminalOpen() is false while the function is not configured.
    const size_t taken = function_.isTerminalOpen() ? function_.write(data) : 0u;
    droppedBytes_ += static_cast<uint32_t>(data.size() - taken);
    return data.size();
 }
 
-std::expected<void, Writable::Error> UsbSerial::flush() {
+art::expected<void, Writable::Error> UsbSerial::flush() {
    return {};
 }
 
