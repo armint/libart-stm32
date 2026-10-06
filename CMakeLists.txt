@@ -22,7 +22,9 @@ file(GLOB_RECURSE PROJECT_HEADERS
 add_library(art-stm32 STATIC ${PROJECT_SOURCES})
 add_library(art::stm32 ALIAS art-stm32)
 
-target_compile_features(art-stm32 PUBLIC cxx_std_23)
+# The sources need C++17 only. The consumer selects the standard
+# (CMAKE_CXX_STANDARD); art::core can raise it to C++23 (see README).
+target_compile_features(art-stm32 PUBLIC cxx_std_17)
 
 target_include_directories(
         art-stm32
