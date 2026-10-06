@@ -63,7 +63,8 @@ unit-tests:
       fi
     - ctest --test-dir build-tests --output-on-failure
 
-# The families of the firmware projects that use this library.
+# The families of the firmware projects that use this library, and STM32F1
+# (versaloon-next-gen).
 .family-matrix: &family-matrix
   - STM32_FAMILY: STM32L0
     STM32_DEVICE: STM32L073xx
@@ -73,6 +74,11 @@ unit-tests:
     CXX_STANDARD: ["23", "17"]
   - STM32_FAMILY: STM32G0
     STM32_DEVICE: STM32G0B1xx
+    CXX_STANDARD: ["23", "17"]
+  # STM32F1 leaves out the sources that need peripherals it does not have
+  # (see CMakeLists.txt).
+  - STM32_FAMILY: STM32F1
+    STM32_DEVICE: STM32F103xB
     CXX_STANDARD: ["23", "17"]
 
 # Cross-builds art-stm32 with libArT and system-stm32 for each family, at

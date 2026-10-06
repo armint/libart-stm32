@@ -34,12 +34,35 @@ system-stm32 selects `hw::span` from `CMAKE_CXX_STANDARD`, not from
 `art::span` and `hw::span` can be different types. `Stm32UsbDeviceController.h`
 has a `static_assert` that stops such a build.
 
+## STM32F1
+
+The library builds for STM32F1 (STM32F103), with the STM32F1 support of
+system-stm32. `STM32_FAMILY` (a system-stm32 CMake variable) selects the
+family. On `STM32F1`, the build leaves out the sources that need
+peripherals that STM32F1 does not have:
+
+| Source | Reason |
+|--------|--------|
+| `I2cMaster` | It uses the I2C v2 registers. STM32F1 has I2C v1. |
+| `power/TicklessIdleHook` | It uses the RTC wake-up timer and Stop 2 mode. |
+| `sensors/InternalTemperatureSensor` | It uses the factory calibration values of the temperature sensor. STM32F1 does not have them. |
+
+`power/PowerManager` stays in the build, because `SerialWritable` uses it.
+`Serial`, `SerialReadable`, `SerialWritable` and `BlockingSerialWritable`
+use the USART v1 driver of system-stm32 and need no change.
+`usb/Stm32UsbDeviceController` and `usb/UsbSerial` use the STM32F1
+`hw::UsbDevice`.
+
+The CI job `cross-build` builds the library for STM32F103xB (see
+[Continuous integration](#continuous-integration)).
+
 ## USB device controller
 
 `usb/Stm32UsbDeviceController.h` connects the USB device stack of libArT to
 the USB driver of system-stm32. It implements `art::usb::DeviceController`
 (libArT) on `hw::UsbDevice` (system-stm32). The class exists only on a family
-that has a system-stm32 USB driver (currently STM32L0 with USB). On other
+that has a system-stm32 USB driver (currently STM32L0 with USB and STM32F1).
+On other
 families, the header and the source compile to nothing, and the macro
 `ART_STM32_HAS_USB_DEVICE_CONTROLLER` is not defined.
 
@@ -195,8 +218,8 @@ The CI pipeline (`.gitlab-ci.yml`) clones libArT and system-stm32 (branch
 `dev`) next to this repository. It has these jobs:
 
 - `unit-tests`: the host tests at C++23 and at C++17.
-- `cross-build`: a build of `art-stm32` for STM32L073xx, STM32G071xx and
-  STM32G0B1xx, at C++23 and at C++17. The sources of this repository must
+- `cross-build`: a build of `art-stm32` for STM32L073xx, STM32G071xx,
+  STM32G0B1xx and STM32F103xB, at C++23 and at C++17. The sources of this repository must
   compile with `-Wall -Wextra -Wpedantic -Werror`.
 - `cross-build-c0`: the same build for STM32C031xx. Two known gaps prevent a
   full build:
