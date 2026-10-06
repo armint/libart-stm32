@@ -13,9 +13,21 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <type_traits>
 
 #include <usb/DeviceController.h>
 #include <utils/RingBuffer.h>
+#include <utils/compat/span.h>
+
+// startInTransfer() hands its art::span to hw::UsbDevice::startIn(), which
+// takes a hw::span. Both must be the same type: std::span with
+// ART_USE_STD_EXPECTED_SPAN=1 and C++20 or later for system-stm32, the own
+// span of span-compat otherwise. A mixed configuration would convert between
+// two span types instead.
+static_assert(std::is_same<art::span<const uint8_t>, hw::span<const uint8_t>>::value,
+              "art::span (libArT) and hw::span (system-stm32) are different types. "
+              "Use ART_USE_STD_EXPECTED_SPAN=ON with a C++20 or later system-stm32 build, "
+              "or ART_USE_STD_EXPECTED_SPAN=OFF with a C++17 system-stm32 build.");
 
 /**
  * @brief libArT's usb::DeviceController on system-stm32's hw::UsbDevice.
