@@ -10,9 +10,17 @@
 #   GCC_TOOLCHAIN_PREFIX        arm-none-eabi toolchain directory
 #   LIBART_DIR, SYSTEM_STM32_DIR  optional, default: next to this repository
 #   KNOWN_GAPS                  optional, space-separated sources under src/
-#                               that may fail (a family with open issues).
-#                               Then system-stm32 may fail too, and every
-#                               other source of art-stm32 must compile.
+#                               that fail with a known error (a family with
+#                               open issues). Every other source of
+#                               art-stm32 must compile. system-stm32 is then
+#                               not a dependency of the build (see below).
+#   KNOWN_GAP_PATTERN           with KNOWN_GAPS: extended regular expression.
+#                               Every "error:" line of a failing known gap
+#                               must match it. Another error fails the job.
+#   SYSTEM_STM32_KNOWN_GAP      with KNOWN_GAPS: 1 if system-stm32 does not
+#                               build for the family. The script builds it,
+#                               ignores the result, and prints a NOTE when it
+#                               builds. Otherwise system-stm32 must build.
 #   BUILD_DIR                   optional, default: build-ci/<device>-cpp<std>
 #   EXTRA_CMAKE_ARGS            optional, more configure arguments, e.g.
 #                               -D FETCHCONTENT_SOURCE_DIR_SPAN_COMPAT=<dir>
@@ -38,11 +46,21 @@ cmake -S "$ROOT/ci" -B "$BUILD" -G "Unix Makefiles" \
 if [ -z "${KNOWN_GAPS:-}" ]; then
    cmake --build "$BUILD" --target art-stm32 span-type-check -j"$(nproc)"
 else
+   : "${KNOWN_GAP_PATTERN:?KNOWN_GAPS needs KNOWN_GAP_PATTERN}"
+   status=0
+   if [ "${SYSTEM_STM32_KNOWN_GAP:-0}" = 1 ]; then
+      if cmake --build "$BUILD" --target system-stm32 -j"$(nproc)" > "$BUILD/system-stm32.log" 2>&1; then
+         echo "NOTE: system-stm32 builds now. Remove SYSTEM_STM32_KNOWN_GAP."
+      else
+         echo "known gap: system-stm32 does not build ($(grep -c 'error:' "$BUILD/system-stm32.log") errors, see $BUILD/system-stm32.log)"
+      fi
+   else
+      cmake --build "$BUILD" --target system-stm32 -j"$(nproc)" || { echo "FAIL: system-stm32 does not build"; status=1; }
+   fi
    # The /fast targets compile without their dependencies, so the sources of
-   # art-stm32 compile although system-stm32 does not build.
+   # art-stm32 compile also when system-stm32 does not build.
    make -C "$BUILD" -k -j"$(nproc)" art-stm32/fast span-type-check/fast || true
    objects="$BUILD/libart-stm32/CMakeFiles/art-stm32.dir"
-   status=0
    while read -r source; do
       relative="${source#"$ROOT/"}"
       gap=0
@@ -52,7 +70,22 @@ else
       if [ -f "$objects/$relative.obj" ]; then
          [ "$gap" = 1 ] && echo "NOTE: $relative compiles now. Remove it from KNOWN_GAPS."
       elif [ "$gap" = 1 ]; then
-         echo "known gap: $relative does not compile"
+         # Compile the file again alone, so that its errors are the only ones.
+         log="$BUILD/known-gap-$(basename "$relative").log"
+         make -C "$BUILD/libart-stm32" "${relative}.obj" > "$log" 2>&1 || true
+         errors="$(grep 'error:' "$log" || true)"
+         other="$(printf '%s\n' "$errors" | grep -v -E -- "$KNOWN_GAP_PATTERN" | grep . || true)"
+         if [ -z "$errors" ]; then
+            echo "FAIL: $relative does not compile, but its log has no error line"
+            cat "$log"
+            status=1
+         elif [ -n "$other" ]; then
+            echo "FAIL: $relative fails with errors other than the known gap:"
+            printf '%s\n' "$other"
+            status=1
+         else
+            echo "known gap: $relative fails with the known error only ($(printf '%s\n' "$errors" | wc -l) error lines)"
+         fi
       else
          echo "FAIL: $relative does not compile and is not a known gap"
          status=1

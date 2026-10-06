@@ -203,8 +203,10 @@ The CI pipeline (`.gitlab-ci.yml`) clones libArT and system-stm32 (branch
   [system-stm32#27](https://gitlab.vandertogt.org/embedded-libraries/system-stm32/-/issues/27)
   (system-stm32 does not build for C0) and
   [#19](https://gitlab.vandertogt.org/embedded-libraries/libart-stm32/-/issues/19)
-  (`InternalTemperatureSensor.cpp`). The job fails if another source of
-  `art-stm32` does not compile.
+  (`InternalTemperatureSensor.cpp`). `InternalTemperatureSensor.cpp` can fail
+  only with the known errors (`KNOWN_GAP_PATTERN`). The job fails if this file
+  fails with another error, or if another source of `art-stm32` does not
+  compile. The job prints a note when a gap is fixed.
 
 Each job checks that the build used the intended standard and span type.
 `ci/SpanTypeCheck.cpp` checks the types at compile time.
