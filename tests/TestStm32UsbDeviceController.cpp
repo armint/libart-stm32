@@ -554,6 +554,64 @@ TEST_CASE("Stm32UsbDeviceController arms an OUT endpoint only after its "
   CHECK(f.hardware.armedOut.size() == 2);
 }
 
+TEST_CASE("Stm32UsbDeviceController opens one OUT endpoint double-buffered") {
+  Fixture f;
+  f.controller.setDoubleBufferedOut(0x03);
+  REQUIRE(f.controller.openEndpoint({0x03, art::usb::EndpointType::Bulk, 64}));
+  REQUIRE(f.controller.openEndpoint({0x01, art::usb::EndpointType::Bulk, 64}));
+  REQUIRE(f.controller.openEndpoint({0x83, art::usb::EndpointType::Bulk, 64}));
+  REQUIRE(f.hardware.openCalls.size() == 3);
+  CHECK(f.hardware.openCalls[0].doubleBuffered);
+  CHECK_FALSE(f.hardware.openCalls[1].doubleBuffered);
+  CHECK_FALSE(f.hardware.openCalls[2].doubleBuffered);
+
+  // Only a bulk endpoint, and none without setDoubleBufferedOut().
+  Fixture g;
+  g.controller.setDoubleBufferedOut(0x02);
+  REQUIRE(
+      g.controller.openEndpoint({0x02, art::usb::EndpointType::Interrupt, 8}));
+  CHECK_FALSE(g.hardware.openCalls[0].doubleBuffered);
+  Fixture h;
+  REQUIRE(h.controller.openEndpoint({0x02, art::usb::EndpointType::Bulk, 64}));
+  CHECK_FALSE(h.hardware.openCalls[0].doubleBuffered);
+}
+
+TEST_CASE("Stm32UsbDeviceController delivers a packet that armOut() reports") {
+  /// Arms the endpoint again from the packet handler, as a function does.
+  class Rearm : public RecordingEvents {
+  public:
+    Stm32UsbDeviceController *controller{nullptr};
+    std::vector<std::vector<uint8_t>> packets;
+    void outPacketReceived(uint8_t ep,
+                           art::span<const uint8_t> packet) override {
+      RecordingEvents::outPacketReceived(ep, packet);
+      packets.emplace_back(packet.begin(), packet.end());
+      controller->armOutTransfer(ep);
+    }
+  };
+
+  Fixture f;
+  Rearm handler;
+  handler.controller = &f.controller;
+  f.controller.setEventHandler(&handler);
+  f.controller.setDoubleBufferedOut(0x03);
+  REQUIRE(f.controller.openEndpoint({0x03, art::usb::EndpointType::Bulk, 64}));
+  REQUIRE(f.controller.openEndpoint({0x82, art::usb::EndpointType::Bulk, 64}));
+
+  // Packet 1 is reported in the interrupt. Packet 2 came in the second
+  // buffer before the arm: armOut() of packet 1 reports it in the main loop.
+  f.hardware.raise(out(0x03, 1));
+  f.hardware.outData[0x03] = {1};
+  f.hardware.waitingOut[0x03] = {2, 2};
+  f.hardware.raise(inComplete(0x82));
+  f.controller.poll();
+  // In order: the IN event came before armOut() reported packet 2.
+  CHECK(handler.log == std::vector<std::string>{"out 3", "in 130", "out 3"});
+  CHECK(handler.packets == std::vector<std::vector<uint8_t>>{{1}, {2, 2}});
+  CHECK(f.hardware.armedOut == std::vector<uint8_t>{0x03, 0x03});
+  CHECK(f.controller.droppedEvents() == 0);
+}
+
 TEST_CASE("Stm32UsbDeviceController forgets a deferred arm when the endpoint "
           "closes") {
   Fixture f;

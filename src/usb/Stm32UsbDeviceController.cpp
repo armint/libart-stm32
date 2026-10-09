@@ -35,7 +35,9 @@ hw::usb::EndpointType toHardware(art::usb::EndpointType type) {
    return hw::usb::EndpointType::Interrupt;
 }
 
-// One more store after a load: the interrupt is the only writer of these counters.
+// One more store after a load: only the interrupt callback writes these
+// counters. hw::UsbDevice::armOut() can call it in the main loop, but with
+// the USB interrupt masked, so two writers never run at the same time.
 template <typename T>
 void increment(std::atomic<T> &counter, std::memory_order order) {
    counter.store(static_cast<T>(counter.load(std::memory_order_relaxed) + 1u), order);
@@ -223,7 +225,8 @@ bool Stm32UsbDeviceController::openEndpoint(const art::usb::EndpointConfig &conf
       openOut_ |= kEndpoint0Bit;
       return true;
    }
-   if(!device_.openEndpoint(config.address, toHardware(config.type), config.maxPacketSize)) {
+   const bool doubleBuffered = config.address == doubleBufferedOut_ && config.type == art::usb::EndpointType::Bulk;
+   if(!device_.openEndpoint(config.address, toHardware(config.type), config.maxPacketSize, doubleBuffered)) {
       return false;
    }
    (isInEndpoint(config.address) ? openIn_ : openOut_) |= static_cast<uint8_t>(1u << number);
