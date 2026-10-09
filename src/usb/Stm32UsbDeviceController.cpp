@@ -35,7 +35,9 @@ hw::usb::EndpointType toHardware(art::usb::EndpointType type) {
    return hw::usb::EndpointType::Interrupt;
 }
 
-// One more store after a load: the interrupt is the only writer of these counters.
+// One more store after a load: only the interrupt callback writes these
+// counters. hw::UsbDevice::armOut() can call it in the main loop, but with
+// the USB interrupt masked, so two writers never run at the same time.
 template <typename T>
 void increment(std::atomic<T> &counter, std::memory_order order) {
    counter.store(static_cast<T>(counter.load(std::memory_order_relaxed) + 1u), order);
