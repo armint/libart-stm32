@@ -60,6 +60,14 @@ static_assert(std::is_same<art::span<const uint8_t>, hw::span<const uint8_t>>::v
  *    queue: the controller arms the endpoint only after poll() has delivered
  *    the packet, because the next packet would overwrite it in packet memory.
  *
+ * Double-buffered OUT: setDoubleBufferedOut() makes the controller open
+ * one bulk OUT endpoint with two buffers (hw::UsbDevice, STM32F1 only). The
+ * hardware then receives the next packet while the main loop handles the
+ * last one. The protocol layer sees no difference: one packet per
+ * armOutTransfer(). hw::UsbDevice::armOut() can report the next packet
+ * itself. It then calls the interrupt callback in the main loop, with the
+ * USB interrupt masked, so the queue still has one producer at a time.
+ *
  * Port limits:
  *  - EP0 must have a bMaxPacketSize0 of 64 (hw::UsbDevice::Ep0MaxPacketSize).
  *  - closeEndpoint() sets the endpoint to NAK. The hardware cannot disable one
@@ -104,6 +112,16 @@ class Stm32UsbDeviceController final : public art::usb::DeviceController {
    /// Gives the queued events to the event handler. Call it from the main loop.
    void poll();
 
+   /**
+    * @brief Opens the bulk OUT endpoint endpointAddress double-buffered
+    * (see the class comment) when the protocol layer opens it. Call it
+    * before begin(). The IN endpoint with the same number cannot open.
+    * Only one endpoint; a second call replaces the first.
+    */
+   void setDoubleBufferedOut(uint8_t endpointAddress) {
+      doubleBufferedOut_ = endpointAddress;
+   }
+
    /// The number of events that the interrupt could not queue because the queue was full.
    [[nodiscard]] uint32_t droppedEvents() const {
       return droppedEvents_.load(std::memory_order_relaxed);
@@ -131,11 +149,14 @@ class Stm32UsbDeviceController final : public art::usb::DeviceController {
    // number. Main loop only.
    uint8_t openIn_ = 0u;
    uint8_t openOut_ = 0u;
+   // The OUT endpoint of setDoubleBufferedOut(), or kNoAddress
+   uint8_t doubleBufferedOut_ = kNoAddress;
 
    // Shared with the interrupt. Only loads and stores: Cortex-M0+ has no
    // atomic read-modify-write. The *Queued_ counters are written by the
-   // interrupt, the *Delivered_ counters by poll(). A pair differs while an
-   // event of that type waits in the queue.
+   // interrupt callback (also when hw::UsbDevice::armOut() calls it with
+   // the interrupt masked), the *Delivered_ counters by poll(). A pair
+   // differs while an event of that type waits in the queue.
    std::atomic<uint8_t> pendingAddress_{ kNoAddress };
    std::atomic<uint8_t> resetsQueued_{ 0u };
    std::atomic<uint8_t> setupsQueued_{ 0u };

@@ -27,6 +27,7 @@ public:
     uint8_t address;
     usb::EndpointType type;
     uint16_t maxPacketSize;
+    bool doubleBuffered;
   };
 
   usb::EventCallback callback{nullptr};
@@ -41,6 +42,9 @@ public:
   std::map<uint8_t, std::vector<uint8_t>> lastIn;
   bool startInResult{true};
   std::vector<uint8_t> armedOut;
+  // A double-buffered endpoint: a packet that waits in the second buffer.
+  // armOut() reports it through the callback, as the real driver does.
+  std::map<uint8_t, std::vector<uint8_t>> waitingOut;
   std::map<uint8_t, std::vector<uint8_t>> outData;
   std::map<uint8_t, bool> stalled;
   // STAT VALID: armed by armOut() or startIn(), not completed yet.
@@ -72,8 +76,9 @@ public:
   void setAddress(uint8_t value) { address = value; }
 
   [[nodiscard]] bool openEndpoint(uint8_t ep, usb::EndpointType type,
-                                  uint16_t maxPacketSize) {
-    openCalls.push_back({ep, type, maxPacketSize});
+                                  uint16_t maxPacketSize,
+                                  bool doubleBuffered = false) {
+    openCalls.push_back({ep, type, maxPacketSize, doubleBuffered});
     return openResult;
   }
 
@@ -92,6 +97,13 @@ public:
     armedOut.push_back(ep);
     valid[ep] = true;
     stalled[ep] = false;
+    auto waiting = waitingOut.find(ep);
+    if (waiting != waitingOut.end()) {
+      outData[ep] = waiting->second;
+      waitingOut.erase(waiting);
+      raise(usb::Event{usb::EventType::Out, ep,
+                       static_cast<uint16_t>(outData[ep].size()), {}});
+    }
     return true;
   }
 

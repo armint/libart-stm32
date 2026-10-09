@@ -106,6 +106,31 @@ After `start()`, the host resets the device and sends SETUP packets. If
   that endpoint takes effect only after `poll()` delivers the packet. Thus
   the next packet cannot overwrite the packet in packet memory.
 
+### Double-buffered OUT endpoint
+
+On STM32F1, `setDoubleBufferedOut(address)` makes the controller open one
+bulk OUT endpoint with two buffers (see the system-stm32 README,
+"Double-buffered bulk OUT"). Call it before `begin()`. The hardware then
+receives the next packet while the main loop handles the last packet.
+Thus the host gets fewer NAKs, and the OUT transfer rate goes up.
+
+```cpp
+usbController.setDoubleBufferedOut(0x03);
+usbController.begin();
+```
+
+The protocol layer sees no difference. It gets one packet for each
+`armOutTransfer()`. When the next packet is already in the second buffer,
+`hw::UsbDevice::armOut()` puts its event into the queue at once. This
+occurs in the main loop, with the USB interrupt masked. Thus the queue
+still has one producer at a time. Each endpoint direction still puts at
+most one packet event into the queue.
+
+The IN endpoint with the same number cannot open. The packet memory must
+have room for two buffers. On the STM32F1, give `hw::UsbDevice` a smaller
+buffer descriptor table if necessary (constructor argument
+`endpointCount`).
+
 ### Queue size
 
 An endpoint answers NAK until it is armed again. Thus each endpoint
