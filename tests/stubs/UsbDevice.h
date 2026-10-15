@@ -58,6 +58,9 @@ public:
   // hardware sets the endpoint to NAK and flips DTOG between the read and
   // the write, so the write leaves a wrong result.
   bool raceOnNextWrite{false};
+  // The race above also raises the InComplete event of an IN endpoint, as
+  // the interrupt does after the write.
+  bool raiseOnRace{false};
 
   void begin(usb::EventCallback cb, void *ctx) {
     callback = cb;
@@ -172,6 +175,9 @@ private:
     }
     raceOnNextWrite = false;
     complete(ep);
+    if (raiseOnRace && (ep & 0x80u) != 0u) {
+      raise(usb::Event{usb::EventType::InComplete, ep, 0, {}});
+    }
     return true;
   }
 };

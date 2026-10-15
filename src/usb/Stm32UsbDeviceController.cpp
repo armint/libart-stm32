@@ -282,6 +282,27 @@ bool Stm32UsbDeviceController::startInTransfer(uint8_t endpointAddress, art::spa
    return device_.startIn(endpointAddress, packet);
 }
 
+bool Stm32UsbDeviceController::cancelInTransfer(uint8_t endpointAddress) {
+   if(!isInEndpoint(endpointAddress) || endpointNumber(endpointAddress) == 0u || !isOpen(endpointAddress)) {
+      return true;
+   }
+   // Two writes, see closeEndpoint(): a transaction that completes during the
+   // first write leaves the endpoint VALID, and the second write corrects it.
+   // After them the hardware sends nothing more on the endpoint.
+   device_.setNak(endpointAddress);
+   device_.setNak(endpointAddress);
+#if defined(__arm__)
+   // setNak() unmasks the USB interrupt at its end. The barriers make sure
+   // that a pending IN completion has run and is counted before the check.
+   __asm volatile("dsb 0xF" ::: "memory");
+   __asm volatile("isb 0xF" ::: "memory");
+#endif
+   // An InComplete event that waits in the queue belongs to a packet that
+   // the host acknowledged: it is still delivered.
+   const size_t index = slot(endpointAddress);
+   return packetsQueued_[index].load(std::memory_order_acquire) == packetsDelivered_[index];
+}
+
 void Stm32UsbDeviceController::armOutTransfer(uint8_t endpointAddress) {
    if(isInEndpoint(endpointAddress) || !isOpen(endpointAddress) || isSupersededControlCall(endpointAddress)) {
       return;

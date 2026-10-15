@@ -307,6 +307,56 @@ TEST_CASE("Stm32UsbDeviceController stalls and clears endpoints") {
   }
 }
 
+TEST_CASE("Stm32UsbDeviceController takes back an IN packet") {
+  Fixture f;
+  f.openEp0();
+  REQUIRE(f.controller.openEndpoint({0x82, art::usb::EndpointType::Bulk, 64}));
+  REQUIRE(f.controller.openEndpoint({0x02, art::usb::EndpointType::Bulk, 64}));
+  const std::array<uint8_t, 4> data{0x82, 0x01, 0x01, 0x02};
+
+  SUBCASE("the host has not read it") {
+    REQUIRE(f.controller.startInTransfer(0x82, data));
+    CHECK(f.controller.cancelInTransfer(0x82));
+    CHECK_FALSE(f.hardware.valid[0x82]);
+    CHECK(f.hardware.nakCalls == std::vector<uint8_t>{0x82, 0x82});
+    // The data toggle stays: the host did not acknowledge the packet.
+    CHECK(f.hardware.toggle[0x82] == 0);
+    f.controller.poll();
+    CHECK(f.events.log.empty());
+    // The endpoint takes the next packet.
+    CHECK(f.controller.startInTransfer(0x82, data));
+  }
+  SUBCASE("the host read it before the call") {
+    REQUIRE(f.controller.startInTransfer(0x82, data));
+    f.hardware.complete(0x82);
+    f.hardware.raise(inComplete(0x82));
+    CHECK_FALSE(f.controller.cancelInTransfer(0x82));
+    f.controller.poll();
+    CHECK(f.events.log == std::vector<std::string>{"in 130"});
+    CHECK(f.controller.cancelInTransfer(0x82));
+  }
+  SUBCASE("the host reads it during the first NAK write") {
+    REQUIRE(f.controller.startInTransfer(0x82, data));
+    f.hardware.raceOnNextWrite = true;
+    f.hardware.raiseOnRace = true;
+    CHECK_FALSE(f.controller.cancelInTransfer(0x82));
+    CHECK_FALSE(f.hardware.valid[0x82]);
+    f.controller.poll();
+    CHECK(f.events.log == std::vector<std::string>{"in 130"});
+  }
+  SUBCASE("no packet") {
+    CHECK(f.controller.cancelInTransfer(0x82));
+    f.controller.poll();
+    CHECK(f.events.log.empty());
+  }
+  SUBCASE("EP0, OUT and closed endpoints are not touched") {
+    CHECK(f.controller.cancelInTransfer(0x80));
+    CHECK(f.controller.cancelInTransfer(0x02));
+    CHECK(f.controller.cancelInTransfer(0x83));
+    CHECK(f.hardware.nakCalls.empty());
+  }
+}
+
 TEST_CASE("Stm32UsbDeviceController counts the events that do not fit") {
   hw::UsbDevice hardware;
   RingBuffer<Event, 4> queue;
