@@ -344,6 +344,25 @@ TEST_CASE("Stm32UsbDeviceController takes back an IN packet") {
     f.controller.poll();
     CHECK(f.events.log == std::vector<std::string>{"in 130"});
   }
+  SUBCASE("a halted endpoint keeps its STALL") {
+    REQUIRE(f.controller.startInTransfer(0x82, data));
+    f.controller.setEndpointStall(0x82, true);
+    f.hardware.nakCalls.clear();
+    CHECK(f.controller.cancelInTransfer(0x82));
+    CHECK(f.hardware.isStalled(0x82));
+    CHECK(f.hardware.nakCalls.empty());
+  }
+  SUBCASE("an event that a close made stale does not count") {
+    REQUIRE(f.controller.startInTransfer(0x82, data));
+    f.hardware.complete(0x82);
+    f.hardware.raise(inComplete(0x82));
+    f.controller.closeEndpoint(0x82);
+    REQUIRE(f.controller.openEndpoint({0x82, art::usb::EndpointType::Bulk, 64}));
+    REQUIRE(f.controller.startInTransfer(0x82, data));
+    CHECK(f.controller.cancelInTransfer(0x82));
+    f.controller.poll();
+    CHECK(f.events.log.empty());
+  }
   SUBCASE("no packet") {
     CHECK(f.controller.cancelInTransfer(0x82));
     f.controller.poll();

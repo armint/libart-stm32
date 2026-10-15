@@ -286,21 +286,37 @@ bool Stm32UsbDeviceController::cancelInTransfer(uint8_t endpointAddress) {
    if(!isInEndpoint(endpointAddress) || endpointNumber(endpointAddress) == 0u || !isOpen(endpointAddress)) {
       return true;
    }
-   // Two writes, see closeEndpoint(): a transaction that completes during the
-   // first write leaves the endpoint VALID, and the second write corrects it.
-   // After them the hardware sends nothing more on the endpoint.
-   device_.setNak(endpointAddress);
-   device_.setNak(endpointAddress);
-#if defined(__arm__)
-   // setNak() unmasks the USB interrupt at its end. The barriers make sure
-   // that a pending IN completion has run and is counted before the check.
-   __asm volatile("dsb 0xF" ::: "memory");
-   __asm volatile("isb 0xF" ::: "memory");
-#endif
-   // An InComplete event that waits in the queue belongs to a packet that
-   // the host acknowledged: it is still delivered.
    const size_t index = slot(endpointAddress);
-   return packetsQueued_[index].load(std::memory_order_acquire) == packetsDelivered_[index];
+   // A NAK write would end the STALL (STAT_TX is a toggle field). A stalled
+   // endpoint sends nothing, so only the queue decides.
+   if(!device_.isStalled(endpointAddress)) {
+#if defined(__arm__)
+      // All interrupts stay masked across both writes. Else the USB
+      // interrupt runs after the first write, and an endpoint that the
+      // first write left VALID can send the old packet again before the
+      // second write.
+      uint32_t primask = 0u;
+      __asm volatile("mrs %0, primask" : "=r"(primask)::"memory");
+      __asm volatile("cpsid i" ::: "memory");
+#endif
+      // Two writes, see closeEndpoint(): a transaction that completes during
+      // the first write leaves the endpoint VALID, and the second write
+      // corrects it. After them the hardware sends nothing more.
+      device_.setNak(endpointAddress);
+      device_.setNak(endpointAddress);
+#if defined(__arm__)
+      __asm volatile("msr primask, %0" ::"r"(primask) : "memory");
+      // The barriers make sure that a pending IN completion has run and is
+      // counted before the check. The caller runs at thread level.
+      __asm volatile("dsb 0xF" ::: "memory");
+      __asm volatile("isb 0xF" ::: "memory");
+#endif
+   }
+   // An InComplete event that waits in the queue belongs to a packet that
+   // the host acknowledged: it is still delivered. Events that
+   // closeEndpoint() made stale are dropped, so they do not count.
+   const auto waiting = static_cast<uint8_t>(packetsQueued_[index].load(std::memory_order_acquire) - packetsDelivered_[index]);
+   return waiting == staleEvents_[index];
 }
 
 void Stm32UsbDeviceController::armOutTransfer(uint8_t endpointAddress) {
