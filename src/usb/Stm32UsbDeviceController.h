@@ -70,6 +70,13 @@ static_assert(std::is_same<art::span<const uint8_t>, hw::span<const uint8_t>>::v
  *
  * Port limits:
  *  - EP0 must have a bMaxPacketSize0 of 64 (hw::UsbDevice::Ep0MaxPacketSize).
+ *  - cancelInTransfer() sets the IN endpoint to NAK with two writes, as
+ *    closeEndpoint() does, with all interrupts masked between them. If the
+ *    host took the packet before the call or during the first write, its
+ *    InComplete event waits in the queue, and the call returns false. The
+ *    call does not touch a stalled endpoint.
+ *  - cancelInTransfer() does not take back an EP0 packet. The control layer
+ *    must not call it on EP0.
  *  - closeEndpoint() sets the endpoint to NAK. The hardware cannot disable one
  *    endpoint and keep the others. When the last endpoint other than EP0 is
  *    closed, the controller disables all of them and frees their packet
@@ -136,6 +143,7 @@ class Stm32UsbDeviceController final : public art::usb::DeviceController {
    void closeEndpoint(uint8_t endpointAddress) override;
    void setEndpointStall(uint8_t endpointAddress, bool stall) override;
    bool startInTransfer(uint8_t endpointAddress, art::span<const uint8_t> packet) override;
+   bool cancelInTransfer(uint8_t endpointAddress) override;
    void armOutTransfer(uint8_t endpointAddress) override;
 
    private:

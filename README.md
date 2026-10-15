@@ -105,6 +105,13 @@ After `start()`, the host resets the device and sends SETUP packets. If
 - If an OUT packet of an endpoint waits in the queue, `armOutTransfer()` on
   that endpoint takes effect only after `poll()` delivers the packet. Thus
   the next packet cannot overwrite the packet in packet memory.
+- `cancelInTransfer()` sets the IN endpoint to NAK with two writes, as
+  `closeEndpoint()` does. All interrupts stay masked between the two writes.
+  The data toggle does not change. If the host took the packet before the
+  call or during the first write, its InComplete event waits in the queue.
+  Then `cancelInTransfer()` returns false, and `poll()` delivers the event.
+  The call does not touch a stalled endpoint, and it does not take back an
+  EP0 packet.
 
 ### Double-buffered OUT endpoint
 
