@@ -196,7 +196,6 @@ def main():
         log.start()
         summary, uid = board_report(log, results, args.timeout)
         if summary is not None:
-            test_vcp_echo(log, vcp, results)
             test_usb(log, results, summary, uid)
             # The board prints this check after the USB configuration.
             crs = log.wait_for(r"^(PASS|FAIL) crs-sync-usb-sof", summary, 5.0)
@@ -204,6 +203,9 @@ def main():
                 results.add("host", "crs-sync-usb-sof", False, "no line from the board")
             else:
                 results.add("board", "crs-sync-usb-sof", log.lines(crs, crs + 1)[0].startswith("PASS"))
+            # Last: no other board output can split the echoed line now.
+            time.sleep(0.2)
+            test_vcp_echo(log, vcp, results)
 
     failed = results.failed()
     print(f"\nRESULT {len(results.items) - len(failed)} passed, {len(failed)} failed")
