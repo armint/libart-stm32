@@ -15,6 +15,14 @@ using Pin = hw::GpioPin;
 
 void alternate(GPIO_TypeDef *port, uint8_t pin, Pin::AlternateFunction af, Pin::Pull pull = Pin::Pull::None);
 
+/**
+ * @brief Makes the read-only flash area (0x08FFF000 to 0x08FFFFFF: UID,
+ * VREFINT_CAL, TS_CAL) non-cacheable with MPU region 0. RM0481 section 7.3.2:
+ * the MPU must disable cacheability for the OTP and read-only areas. Call it
+ * before Rcc::enableICache().
+ */
+void uncacheReadOnlyArea();
+
 /// Starts the DWT cycle counter (core clock cycles).
 void startCycleCounter();
 

@@ -55,6 +55,7 @@ int main() {
 
    const bool useHsi = useHsiRecipe(key.read());
    const bool clockOk = useHsi ? Rcc::setClock250MhzHSI() : Rcc::setClock250MhzHSE();
+   uncacheReadOnlyArea();
    Rcc::enableICache();
    startCycleCounter();
    SysTick_Config(SystemCoreClock / 1000U);
