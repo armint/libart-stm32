@@ -51,6 +51,7 @@ int main() {
    testInterrupts();
    testGpio();
    testUsart();
+   testSpi();
    startWatchdog();
    printSummary();
 

@@ -9,6 +9,7 @@ add_executable(${_name}
         Report.cpp
         TestsClock.cpp
         TestsGpio.cpp
+        TestsSpi.cpp
         TestsUsart.cpp
         TestsWatchdog.cpp)
 target_link_libraries(${_name} PRIVATE art-build-config art::core system-stm32 art-stm32)

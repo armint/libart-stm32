@@ -34,4 +34,9 @@ void testGpio();
 // PCLK and with HSI, the FIFO, GPDMA TX and RX, and a GPDMA abort.
 void testUsart();
 
+// SPI2 master (wire PB15-PB14): the kernel clock, 8/16/32-bit frames, TSIZE
+// and EOT, GPDMA TX and RX, and the SCK rate. Run it after testGpio(): PB13
+// and PB14 need the UCPD dead-battery disable.
+void testSpi();
+
 } // namespace hwtest

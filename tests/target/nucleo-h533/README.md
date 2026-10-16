@@ -27,6 +27,7 @@ Install these jumper wires before you start the test:
 |------|------|----------------|---------|
 | 1 | PA8 – PB10 | D7 – D6 (CN9) | MCO1 (LSE) to TIM2_CH3: clock measurement |
 | 2 | PA9 – PA10 | CN10 | GPIO direction switch, USART1 TX to RX |
+| 3 | PB15 – PB14 | CN10 pins 26 – 28 | SPI2 MOSI to MISO |
 
 A check that needs a missing wire fails. Its `FAIL` line names the wire. The
 other checks are not affected.
@@ -61,3 +62,4 @@ line. After the tests, the main loop reloads an IWDG with a 4 s timeout.
 | GPIO | PB13 (UCPD CC1) reads low with the pull-up until `hw::Pwr::disableUcpdDeadBattery()`. `GpioPin` output and input. `FastPin::setInput()` and `FastPin::setOutput()`. |
 | USART1 | The kernel clock mux (PCLK and HSI) and `getClockFrequency()`. The baud rate (1 Mbit/s), measured with the DWT for each kernel clock. The FIFO: 8 bytes without an overrun. |
 | GPDMA with USART1 | 64 bytes TX and RX at the same time. `Channel::abort()` after 16 of 64 bytes, then a new transfer on the same channel. |
+| SPI2 | The kernel clock (PLL1Q, 125 MHz). Frames of 8, 16 and 32 bits. `setTransferSize()` with EOT. 64 bytes TX and RX through GPDMA, and the SCK rate of that transfer. |
