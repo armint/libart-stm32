@@ -94,6 +94,15 @@ To test the USB echo on Linux, flash the image and connect CN3. Then open
 the new port (for example `/dev/ttyACM1`) in a terminal program. The program
 must set DTR. Each typed character comes back.
 
+### Hardware test image
+
+`tests/target/nucleo-h533/` is a test image for the NUCLEO-H533RE. It checks
+the STM32H5 support of system-stm32 and libart-stm32 on the real chip, and
+prints one `PASS` or `FAIL` line per check on the ST-LINK virtual COM port.
+`ci/cross-build.sh` builds it with the CDC echo image. Its
+[README](tests/target/nucleo-h533/README.md) gives the jumper wires and the
+procedure.
+
 ## USB device controller
 
 `usb/Stm32UsbDeviceController.h` connects the USB device stack of libArT to
