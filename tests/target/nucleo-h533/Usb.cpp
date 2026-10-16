@@ -157,8 +157,13 @@ void checkCrs(bool configured) {
       break;
    case State::WaitStatus:
       if(now >= due) {
-         (void)vcp.printf("  crs trim %lu\r\n", static_cast<unsigned long>(hw::Crs::getTrim()));
-         check("crs-sync-usb-sof", hw::Crs::getSyncStatus() == hw::Crs::SyncStatus::Ok);
+         // The default FELIM suits the 0.14 % trim step of L0/G0. The H5
+         // step is 0.175 % to 0.25 % (DS14539), so the trim can toggle
+         // between two values with SYNCWARNF. That is no failure.
+         (void)vcp.printf("  crs trim %lu, sync warning %d\r\n", static_cast<unsigned long>(hw::Crs::getTrim()),
+                          hw::Crs::isFlagSet(hw::Crs::Flag::SyncWarning));
+         check("crs-sync-usb-sof",
+               hw::Crs::isFlagSet(hw::Crs::Flag::SyncOk) && !hw::Crs::isFlagSet(hw::Crs::Flag::Error));
          state = State::Done;
       }
       break;
