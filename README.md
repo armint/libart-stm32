@@ -56,6 +56,42 @@ use the USART v1 driver of system-stm32 and need no change.
 The CI job `cross-build` builds the library for STM32F103xB (see
 [Continuous integration](#continuous-integration)).
 
+## STM32H5
+
+The library builds for STM32H5 (STM32H533), with the STM32H5 support of
+system-stm32. `Serial`, `SerialReadable`, `SerialWritable`,
+`BlockingSerialWritable` and `sensors/InternalTemperatureSensor` need no
+change. `usb/Stm32UsbDeviceController` and `usb/UsbSerial` use the H5
+`hw::UsbDevice` (USB DRD block). On `STM32H5`, the build leaves out these
+sources:
+
+| Source | Reason |
+|--------|--------|
+| `I2cMaster` | system-stm32 has no I2C driver for STM32H5. |
+| `power/TicklessIdleHook` | `hw::Pwr` cannot select the Stop mode of STM32H5 (`PWR_PMCR`). STM32H5 has no Stop 2 mode. |
+
+### CDC echo image
+
+`examples/nucleo-h533-cdc-echo/` is a test image for the NUCLEO-H533RE. It
+does these steps:
+
+- It sets the core clock to 250 MHz from the 24 MHz HSE crystal. Hold B1
+  during reset to use HSI.
+- It enumerates on USB (CN13) as a CDC-ACM device with the pid.codes test
+  ID `1209:0001`. It echoes each byte that it receives.
+- It prints the USB state changes on USART2, the ST-LINK virtual COM port
+  (115200 8N1). It echoes each byte that it receives there with `Serial`.
+- LD2 blinks at 1 Hz while the main loop runs.
+
+`ci/cross-build.sh` builds the image for `STM32_DEVICE=STM32H533xx` at C++20
+or later. The image is
+`build-ci/STM32H533xx-cpp23/examples/nucleo-h533-cdc-echo/cdc-echo-nucleo-h533.hex`.
+The image uses the start-up code and the linker scripts of system-stm32.
+
+To test the USB echo on Linux, flash the image and connect CN13. Then open
+the new port (for example `/dev/ttyACM1`) in a terminal program. The program
+must set DTR. Each typed character comes back.
+
 ## USB device controller
 
 `usb/Stm32UsbDeviceController.h` connects the USB device stack of libArT to
@@ -251,8 +287,11 @@ The CI pipeline (`.gitlab-ci.yml`) clones libArT and system-stm32 (branch
 
 - `unit-tests`: the host tests at C++23 and at C++17.
 - `cross-build`: a build of `art-stm32` for STM32L073xx, STM32G071xx,
-  STM32G0B1xx and STM32F103xB, at C++23 and at C++17. The sources of this repository must
-  compile with `-Wall -Wextra -Wpedantic -Werror`.
+  STM32G0B1xx, STM32F103xB and STM32H533xx, at C++23 and at C++17. The
+  sources of this repository must compile with
+  `-Wall -Wextra -Wpedantic -Werror`. The STM32H533xx job also builds the
+  CDC echo image at C++23 (see [STM32H5](#stm32h5)). The job keeps the
+  `.hex` file as an artifact.
 - `cross-build-c0`: the same build for STM32C031xx. Two known gaps prevent a
   full build:
   [system-stm32#27](https://gitlab.vandertogt.org/embedded-libraries/system-stm32/-/issues/27)

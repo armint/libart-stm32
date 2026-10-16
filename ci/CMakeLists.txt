@@ -32,3 +32,9 @@ target_compile_options(art-stm32 PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_library(span-type-check OBJECT SpanTypeCheck.cpp)
 target_link_libraries(span-type-check PRIVATE art-build-config art::core system-stm32)
 target_include_directories(span-type-check PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+
+# The CDC echo image of the NUCLEO-H533RE. It uses C++20 designated
+# initializers for the USB descriptors, so it builds from C++20 on.
+if (STM32_DEVICE STREQUAL "STM32H533xx" AND CMAKE_CXX_STANDARD GREATER_EQUAL 20)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../examples/nucleo-h533-cdc-echo examples/nucleo-h533-cdc-echo)
+endif ()
