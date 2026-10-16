@@ -5,9 +5,7 @@ image: "docker.vandertogt.org/firmware-builder:v1.14.0"
 
 variables:
   # Branches of the dependencies that CI clones next to this repository.
-  # Temporary: the libArT branch with DeviceController::cancelInTransfer()
-  # (libArT MR !48). Back to dev before this MR merges.
-  LIBART_REF: feature/cancel-in-transfer
+  LIBART_REF: dev
   SYSTEM_STM32_REF: dev
   # One place for the toolchain location (as in system-stm32).
   GCC_TOOLCHAIN_PREFIX: /opt/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi

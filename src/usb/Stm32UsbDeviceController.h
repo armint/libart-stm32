@@ -1,13 +1,14 @@
 #pragma once
 
 // The controller exists only where system-stm32 has a USB device driver for
-// the family (see the system-stm32 README, "USB device driver"). On the
-// others this header and its source compile to nothing.
+// the family (see the system-stm32 README, "USB device driver"). The driver
+// defines SYSTEM_STM32_USBFS on such a device. On the others this header and
+// its source compile to nothing.
 #if __has_include(<UsbDevice.h>)
 #include <UsbDevice.h>
 #endif
 
-#if __has_include(<UsbDevice.h>) && defined(USB_BASE)
+#if __has_include(<UsbDevice.h>) && defined(SYSTEM_STM32_USBFS)
 #define ART_STM32_HAS_USB_DEVICE_CONTROLLER 1
 
 #include <array>
@@ -61,7 +62,7 @@ static_assert(std::is_same<art::span<const uint8_t>, hw::span<const uint8_t>>::v
  *    the packet, because the next packet would overwrite it in packet memory.
  *
  * Double-buffered OUT: setDoubleBufferedOut() makes the controller open
- * one bulk OUT endpoint with two buffers (hw::UsbDevice, STM32F1 only). The
+ * one bulk OUT endpoint with two buffers (hw::UsbDevice). The
  * hardware then receives the next packet while the main loop handles the
  * last one. The protocol layer sees no difference: one packet per
  * armOutTransfer(). hw::UsbDevice::armOut() can report the next packet
