@@ -44,7 +44,7 @@ cmake -S "$ROOT/ci" -B "$BUILD" -G "Unix Makefiles" \
    ${EXTRA_CMAKE_ARGS:-}
 
 if [ -z "${KNOWN_GAPS:-}" ]; then
-   cmake --build "$BUILD" --target art-stm32 span-type-check -j"$(nproc)"
+   cmake --build "$BUILD" --target art-stm32 span-type-check ci-images -j"$(nproc)"
 else
    : "${KNOWN_GAP_PATTERN:?KNOWN_GAPS needs KNOWN_GAP_PATTERN}"
    status=0

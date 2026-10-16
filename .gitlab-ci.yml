@@ -64,7 +64,7 @@ unit-tests:
     - ctest --test-dir build-tests --output-on-failure
 
 # The families of the firmware projects that use this library, and STM32F1
-# (versaloon-next-gen).
+# and STM32H5 (versaloon-next-gen).
 .family-matrix: &family-matrix
   - STM32_FAMILY: STM32L0
     STM32_DEVICE: STM32L073xx
@@ -80,6 +80,11 @@ unit-tests:
   - STM32_FAMILY: STM32F1
     STM32_DEVICE: STM32F103xB
     CXX_STANDARD: ["23", "17"]
+  # STM32H5 (NUCLEO-H533RE) also builds the CDC echo image at C++23
+  # (ci/CMakeLists.txt).
+  - STM32_FAMILY: STM32H5
+    STM32_DEVICE: STM32H533xx
+    CXX_STANDARD: ["23", "17"]
 
 # Cross-builds art-stm32 with libArT and system-stm32 for each family, at
 # C++23 (ART_USE_STD_EXPECTED_SPAN=1) and at C++17 (=0), through the CI
@@ -94,6 +99,11 @@ cross-build:
   before_script: *private-dependencies
   script:
     - ci/cross-build.sh
+  # The CDC echo image of the NUCLEO-H533RE, ready to flash.
+  artifacts:
+    paths:
+      - build-ci/*/examples/*/*.hex
+    expire_in: 30 days
 
 # STM32C0 does not build yet, at both standards, because of known gaps:
 #  - system-stm32 does not build for C0 (embedded-libraries/system-stm32#27).

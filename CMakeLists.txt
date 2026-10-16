@@ -29,6 +29,17 @@ if (STM32_FAMILY STREQUAL "STM32F1")
     )
 endif ()
 
+# STM32H5: system-stm32 has no driver for these peripherals yet:
+# - I2cMaster: system-stm32 leaves out hw::I2c on the H5.
+# - power/TicklessIdleHook: hw::Pwr cannot select the H5 Stop mode
+#   (PWR_PMCR), and the H5 has no Stop 2 mode.
+if (STM32_FAMILY STREQUAL "STM32H5")
+    list(REMOVE_ITEM PROJECT_SOURCES
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/I2cMaster.cpp"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/power/TicklessIdleHook.cpp"
+    )
+endif ()
+
 file(GLOB_RECURSE PROJECT_HEADERS
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
