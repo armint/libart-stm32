@@ -49,6 +49,7 @@ int main() {
    testClocks(clockOk);
    testTiming();
    testInterrupts();
+   testGpio();
    startWatchdog();
    printSummary();
 

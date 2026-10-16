@@ -26,4 +26,8 @@ void testTiming();
 // argument, and BlockingSection on an IRQ number above 127.
 void testInterrupts();
 
+// GPIO: the UCPD dead-battery disable (PB13), GpioPin and the FastPin
+// direction switch (wire PA9-PA10).
+void testGpio();
+
 } // namespace hwtest
