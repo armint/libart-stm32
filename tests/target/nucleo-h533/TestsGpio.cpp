@@ -24,18 +24,27 @@ uint32_t pa9Mode() {
 } // namespace
 
 void testGpio() {
-   // After reset the UCPD pulls CC1 (PB13) down with Rd (5.1 kOhm). The
-   // internal pull-up (about 40 kOhm) cannot pull the pin high against it.
+   // After reset the UCPD can pull CC1 (PB13) and CC2 (PB14) down with Rd
+   // (5.1 kOhm). The internal pull-up (about 40 kOhm) cannot pull a pin high
+   // against it. The option bit FLASH_OPTSR2.USBPD_DIS (set at delivery)
+   // turns the Rd off on CC1, so the levels before the disable are only
+   // information.
    const Pin cc1(GPIOB, 13);
+   const Pin cc2(GPIOB, 14);
    cc1.configure(Pin::Mode::Input, Pin::OutputType::PushPull, Pin::Pull::Up);
+   cc2.configure(Pin::Mode::Input, Pin::OutputType::PushPull, Pin::Pull::Up);
    delayuS(10);
-   const bool before = cc1.read();
+   const bool cc1Before = cc1.read();
+   const bool cc2Before = cc2.read();
    hw::Pwr::disableUcpdDeadBattery();
    delayuS(10);
-   const bool after = cc1.read();
-   (void)vcp.printf("  PB13 with pull-up: %d before, %d after the dead-battery disable\r\n", before, after);
-   check("ucpd-dead-battery-disable", !before && after);
+   const bool cc1After = cc1.read();
+   const bool cc2After = cc2.read();
+   (void)vcp.printf("  PB13/PB14 with pull-up: %d/%d before, %d/%d after the dead-battery disable, USBPD_DIS %d\r\n",
+                    cc1Before, cc2Before, cc1After, cc2After, (FLASH->OPTSR2_CUR & FLASH_OPTSR2_USBPD_DIS) != 0);
+   check("ucpd-dead-battery-disable", (PWR->UCPDR & PWR_UCPDR_UCPD_DBDIS) != 0 && cc1After && cc2After);
    cc1.configure(Pin::Mode::Analog);
+   cc2.configure(Pin::Mode::Analog);
 
    // PA9 drives PA10.
    const Pin pa10(GPIOA, 10);

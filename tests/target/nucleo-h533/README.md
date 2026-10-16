@@ -95,7 +95,7 @@ After the summary, the main loop does these steps:
 | Clock measurement | LSE starts. The core clock (DWT) and the TIM2 clock, measured against LSE on MCO1. |
 | Timing | 100 SysTick ticks and `delayuS(1000)`, measured with the DWT cycle counter. |
 | Interrupts | `Interrupt::connectHandler()` on the last vector (I3C2_ER, IRQ 132), the handler with an argument, and `BlockingSection` on an IRQ number above 127. |
-| GPIO | PB13 (UCPD CC1) reads low with the pull-up until `hw::Pwr::disableUcpdDeadBattery()`. `GpioPin` output and input. `FastPin::setInput()` and `FastPin::setOutput()`. |
+| GPIO | After `hw::Pwr::disableUcpdDeadBattery()`, PB13 and PB14 (UCPD CC1 and CC2) read high with the pull-up. The image prints the levels before the call as information. `GpioPin` output and input. `FastPin::setInput()` and `FastPin::setOutput()`. |
 | USART1 | The kernel clock mux (PCLK and HSI) and `getClockFrequency()`. The baud rate (1 Mbit/s), measured with the DWT for each kernel clock. The FIFO: 8 bytes without an overrun. |
 | GPDMA memory | A single block. Packing from 8 to 32 bits and unpacking from 32 to 8 bits. A linked list of two items. The transfer complete interrupt. |
 | GPDMA with USART1 | 64 bytes TX and RX at the same time. `Channel::abort()` after 16 of 64 bytes, then a new transfer on the same channel. |
