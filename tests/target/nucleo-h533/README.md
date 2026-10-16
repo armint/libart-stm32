@@ -44,10 +44,15 @@ The image prints one line per check, `PASS <name>` or `FAIL <name>`, and
 then `SUMMARY <passed> passed, <failed> failed`. Lines that start with two
 spaces give measured values. LD2 blinks at 1 Hz after the tests.
 
+The independent watchdog (IWDG) check resets the board once. Thus the
+`BANNER` line comes two times. The checks start after the second `BANNER`
+line. After the tests, the main loop reloads an IWDG with a 4 s timeout.
+
 ## Checks
 
 | Group | Checks |
 |-------|--------|
+| IWDG | A 40 ms watchdog resets the board (`RCC_RSR.IWDGRSTF`). `hw::Dbg::freezeIwdgOnDebug()`. The `/1024` prescaler. |
 | RCC | Result of the 250 MHz recipe, PLL1 as sysclk, `SystemCoreClock`, APB1 to APB3, PLL1Q (125 MHz), flash latency, ICACHE, HSI48. |
 | Clock measurement | LSE starts. The core clock (DWT) and the TIM2 clock, measured against LSE on MCO1. |
 | Timing | 100 SysTick ticks and `delayuS(1000)`, measured with the DWT cycle counter. |

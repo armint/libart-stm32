@@ -5,13 +5,15 @@
 // It sets 250 MHz from the 24 MHz HSE crystal. Hold B1 (PC13) during reset
 // to use the HSI recipe instead. Then it runs the test groups of Tests.h and
 // prints one line per check on the ST-LINK virtual COM port (USART2, 115200
-// 8N1). LD2 (PA5) blinks at 1 Hz in the main loop.
+// 8N1). The IWDG test resets the board once. LD2 (PA5) blinks at 1 Hz in the
+// main loop, which reloads a 4 s IWDG.
 #include "Board.h"
 #include "Report.h"
 #include "Tests.h"
 
 #include <cmsis_device.h>
 
+#include <peripherals/Iwdg.h>
 #include <peripherals/Rcc.h>
 #include <utils/Timekeeping.h>
 #include <utils/timestamp.h>
@@ -43,16 +45,20 @@ int main() {
    startVcp();
    (void)vcp.printf("\r\nBANNER libart-stm32 NUCLEO-H533RE hardware test, %s recipe\r\n", useHsi ? "HSI" : "HSE");
 
+   testWatchdogReset();
    testClocks(clockOk);
    testTiming();
    testInterrupts();
+   startWatchdog();
    printSummary();
 
+   const hw::Iwdg iwdg(IWDG);
    timestamp_t nextBlink = getUptimeTicks() + 500U;
    for(;;) {
       if(getUptimeTicks() >= nextBlink) {
          nextBlink += 500U;
          led.write(!led.read());
+         iwdg.reload();
       }
    }
 }

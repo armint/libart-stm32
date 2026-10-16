@@ -7,7 +7,8 @@ add_executable(${_name}
         main.cpp
         Board.cpp
         Report.cpp
-        TestsClock.cpp)
+        TestsClock.cpp
+        TestsWatchdog.cpp)
 target_link_libraries(${_name} PRIVATE art-build-config art::core system-stm32 art-stm32)
 target_compile_options(${_name} PRIVATE -Wall -Wextra -Wpedantic -Werror)
 target_link_options(${_name} PRIVATE

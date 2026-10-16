@@ -5,6 +5,15 @@
 
 namespace hwtest {
 
+// IWDG: the first start arms a 40 ms watchdog and the board resets. The
+// second start checks the IWDG reset flag and the DBG freeze bit. A marker
+// in TAMP_BKP0R tells the two starts apart. Run it first.
+void testWatchdogReset();
+
+// Starts the IWDG of the main loop (prescaler /1024, 4 s) and checks the
+// prescaler. The main loop reloads it with hw::Iwdg::reload().
+void startWatchdog();
+
 // RCC: the 250 MHz recipe, the bus clocks, ICACHE, and the core clock and the
 // TIM2 clock measured against LSE (wire PA8-PB10). clockOk: the result of
 // Rcc::setClock250MhzHSE() or Rcc::setClock250MhzHSI().
