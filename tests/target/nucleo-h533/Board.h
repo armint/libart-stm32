@@ -6,6 +6,7 @@
 #include <cmsis_device.h>
 #include <cstdint>
 
+#include <peripherals/Dma.h>
 #include <peripherals/GpioPin.h>
 
 namespace hwtest {
@@ -41,6 +42,9 @@ bool waitFor(Done done, uint32_t timeoutUs) {
    }
    return true;
 }
+
+/// Waits up to 10 ms for the end of a GPDMA transfer. false on an error flag.
+bool waitChannel(const Dma::Channel &channel);
 
 /// A peripheral register as a DMA address.
 inline void *address(const volatile uint32_t &reg) {

@@ -18,4 +18,9 @@ bool within(uint64_t value, uint64_t expected, uint32_t ppm) {
    return difference * 1000000U <= expected * ppm;
 }
 
+bool waitChannel(const Dma::Channel &channel) {
+   return waitFor([&] { return channel.isTransferCompleteFlagSet() || channel.isErrorFlagSet(); }, 10000) &&
+          !channel.isErrorFlagSet();
+}
+
 } // namespace hwtest

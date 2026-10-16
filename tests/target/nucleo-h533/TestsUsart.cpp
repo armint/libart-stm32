@@ -110,11 +110,6 @@ Dma::Config txConfig() {
    return config;
 }
 
-bool waitChannel(const Dma::Channel &channel) {
-   return waitFor([&] { return channel.isTransferCompleteFlagSet() || channel.isErrorFlagSet(); }, 10000) &&
-          !channel.isErrorFlagSet();
-}
-
 void testUsartDma() {
    Rcc::enableGPDMA1Clock();
    for(size_t i = 0; i < sizeof(txData); ++i) {
