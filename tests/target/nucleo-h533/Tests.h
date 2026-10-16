@@ -43,4 +43,9 @@ void testUsart();
 // and PB14 need the UCPD dead-battery disable.
 void testSpi();
 
+// ADC1: calibration, VDDA from Vrefint, the libart-stm32
+// InternalTemperatureSensor, a two-rank sequence through GPDMA and
+// oversampling.
+void testAdc();
+
 } // namespace hwtest

@@ -64,3 +64,4 @@ line. After the tests, the main loop reloads an IWDG with a 4 s timeout.
 | GPDMA memory | A single block. Packing from 8 to 32 bits and unpacking from 32 to 8 bits. A linked list of two items. The transfer complete interrupt. |
 | GPDMA with USART1 | 64 bytes TX and RX at the same time. `Channel::abort()` after 16 of 64 bytes, then a new transfer on the same channel. |
 | SPI2 | The kernel clock (PLL1Q, 125 MHz). Frames of 8, 16 and 32 bits. `setTransferSize()` with EOT. 64 bytes TX and RX through GPDMA, and the SCK rate of that transfer. |
+| ADC1 | Power-up, calibration and enable. VDDA from Vrefint (3.0 V to 3.6 V). The libart-stm32 `InternalTemperatureSensor` (10 °C to 70 °C). A sequence of two ranks through GPDMA. Oversampling x16. |

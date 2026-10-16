@@ -53,6 +53,7 @@ int main() {
    testDma();
    testUsart();
    testSpi();
+   testAdc();
    startWatchdog();
    printSummary();
 
