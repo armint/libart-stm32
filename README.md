@@ -77,7 +77,7 @@ does these steps:
 
 - It sets the core clock to 250 MHz from the 24 MHz HSE crystal. Hold B1
   during reset to use HSI.
-- It enumerates on USB (CN13) as a CDC-ACM device with the pid.codes test
+- It enumerates on USB (CN3) as a CDC-ACM device with the pid.codes test
   ID `1209:0001`. It echoes each byte that it receives.
 - It prints the USB state changes on USART2, the ST-LINK virtual COM port
   (115200 8N1). It echoes each byte that it receives there with `Serial`.
@@ -86,9 +86,11 @@ does these steps:
 `ci/cross-build.sh` builds the image for `STM32_DEVICE=STM32H533xx` at C++20
 or later. The image is
 `build-ci/STM32H533xx-cpp23/examples/nucleo-h533-cdc-echo/cdc-echo-nucleo-h533.hex`.
+For STM32H533xx, `ci/CMakeLists.txt` sets the system-stm32 variable
+`SYSTEM_STM32_HSE_VALUE` to 24000000 (the crystal of the NUCLEO-H533RE).
 The image uses the start-up code and the linker scripts of system-stm32.
 
-To test the USB echo on Linux, flash the image and connect CN13. Then open
+To test the USB echo on Linux, flash the image and connect CN3. Then open
 the new port (for example `/dev/ttyACM1`) in a terminal program. The program
 must set DTR. Each typed character comes back.
 

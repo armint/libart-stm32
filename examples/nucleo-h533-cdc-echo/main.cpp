@@ -1,7 +1,7 @@
 // CDC echo image for the NUCLEO-H533RE. It checks the USB device controller
 // and the serial adapter of this library on the STM32H5.
 //
-// - USB (CN13, USB Type-C): a CDC-ACM device (virtual COM port, pid.codes
+// - USB (CN3, USB Type-C): a CDC-ACM device (virtual COM port, pid.codes
 //   test ID 1209:0001). It echoes every byte that it receives. Open the port
 //   in a terminal program: UsbSerial discards data while DTR is low.
 // - USART2 (PA2/PA3, the ST-LINK virtual COM port, 115200 8N1): Serial,
@@ -32,6 +32,7 @@
 #include <utils/timestamp.h>
 
 static_assert(ART_STM32_HAS_USB_DEVICE_CONTROLLER && ART_STM32_HAS_USB_SERIAL, "the H5 needs the USB adapter");
+static_assert(HSE_VALUE == 24000000UL, "the NUCLEO-H533RE has a 24 MHz crystal (SYSTEM_STM32_HSE_VALUE)");
 
 namespace {
 
