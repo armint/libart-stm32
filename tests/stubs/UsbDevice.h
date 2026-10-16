@@ -8,8 +8,9 @@
 #include "utils/Span.h"
 #include <vector>
 
-// The real header is empty unless the CMSIS device header defines USB_BASE.
-#define USB_BASE 0x40005C00u
+// The real driver defines SYSTEM_STM32_USBFS on a device with the USB FS
+// peripheral. Without it, the adapter compiles to nothing.
+#define SYSTEM_STM32_USBFS 1
 
 namespace hw {
 

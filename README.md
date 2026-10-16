@@ -60,11 +60,11 @@ The CI job `cross-build` builds the library for STM32F103xB (see
 
 `usb/Stm32UsbDeviceController.h` connects the USB device stack of libArT to
 the USB driver of system-stm32. It implements `art::usb::DeviceController`
-(libArT) on `hw::UsbDevice` (system-stm32). The class exists only on a family
-that has a system-stm32 USB driver (currently STM32L0 with USB and STM32F1).
-On other
-families, the header and the source compile to nothing, and the macro
-`ART_STM32_HAS_USB_DEVICE_CONTROLLER` is not defined.
+(libArT) on `hw::UsbDevice` (system-stm32). The class exists only on a device
+with the USB full-speed (FS) device driver of system-stm32 (currently
+STM32F1, STM32L0 with USB and STM32H5). This driver defines the macro
+`SYSTEM_STM32_USBFS`. On other devices, the header and the source compile to
+nothing, and the macro `ART_STM32_HAS_USB_DEVICE_CONTROLLER` is not defined.
 
 ```cpp
 hw::UsbDevice usbHardware;
@@ -115,7 +115,7 @@ After `start()`, the host resets the device and sends SETUP packets. If
 
 ### Double-buffered OUT endpoint
 
-On STM32F1, `setDoubleBufferedOut(address)` makes the controller open one
+`setDoubleBufferedOut(address)` makes the controller open one
 bulk OUT endpoint with two buffers (see the system-stm32 README,
 "Double-buffered bulk OUT"). Call it before `begin()`. The hardware then
 receives the next packet while the main loop handles the last packet.
@@ -134,9 +134,9 @@ still has one producer at a time. Each endpoint direction still puts at
 most one packet event into the queue.
 
 The IN endpoint with the same number cannot open. The packet memory must
-have room for two buffers. On the STM32F1, give `hw::UsbDevice` a smaller
-buffer descriptor table if necessary (constructor argument
-`endpointCount`).
+have room for two buffers. The STM32F1 has only 512 bytes of packet memory.
+There, give `hw::UsbDevice` a smaller buffer descriptor table if necessary
+(constructor argument `endpointCount`).
 
 ### Queue size
 
