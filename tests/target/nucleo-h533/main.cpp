@@ -50,6 +50,7 @@ int main() {
    testTiming();
    testInterrupts();
    testGpio();
+   testUsart();
    startWatchdog();
    printSummary();
 
