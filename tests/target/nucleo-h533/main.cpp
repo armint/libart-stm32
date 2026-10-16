@@ -52,6 +52,7 @@ int main() {
    testGpio();
    testDma();
    testUsart();
+   testSerial();
    testSpi();
    testAdc();
    startWatchdog();

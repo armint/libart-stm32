@@ -11,6 +11,7 @@ add_executable(${_name}
         TestsClock.cpp
         TestsDma.cpp
         TestsGpio.cpp
+        TestsSerial.cpp
         TestsSpi.cpp
         TestsUsart.cpp
         TestsWatchdog.cpp)

@@ -26,7 +26,7 @@ Install these jumper wires before you start the test:
 | Wire | Pins | Connector pins | Used by |
 |------|------|----------------|---------|
 | 1 | PA8 – PB10 | D7 – D6 (CN9) | MCO1 (LSE) to TIM2_CH3: clock measurement |
-| 2 | PA9 – PA10 | CN10 | GPIO direction switch, USART1 TX to RX |
+| 2 | PA9 – PA10 | CN10 | GPIO direction switch, USART1 TX to RX, libart-stm32 serial classes |
 | 3 | PB15 – PB14 | CN10 pins 26 – 28 | SPI2 MOSI to MISO |
 
 A check that needs a missing wire fails. Its `FAIL` line names the wire. The
@@ -65,3 +65,4 @@ line. After the tests, the main loop reloads an IWDG with a 4 s timeout.
 | GPDMA with USART1 | 64 bytes TX and RX at the same time. `Channel::abort()` after 16 of 64 bytes, then a new transfer on the same channel. |
 | SPI2 | The kernel clock (PLL1Q, 125 MHz). Frames of 8, 16 and 32 bits. `setTransferSize()` with EOT. 64 bytes TX and RX through GPDMA, and the SCK rate of that transfer. |
 | ADC1 | Power-up, calibration and enable. VDDA from Vrefint (3.0 V to 3.6 V). The libart-stm32 `InternalTemperatureSensor` (10 °C to 70 °C). A sequence of two ranks through GPDMA. Oversampling x16. |
+| libart-stm32 serial | `Serial` on USART1, interrupt-driven: 200 bytes out and back in. `BlockingSerialWritable` on USART1 with the FIFO. `Serial` on USART2 prints the whole report. |

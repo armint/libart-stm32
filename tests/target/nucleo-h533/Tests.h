@@ -43,6 +43,10 @@ void testUsart();
 // and PB14 need the UCPD dead-battery disable.
 void testSpi();
 
+// libart-stm32 on USART1 (wire PA9-PA10): Serial, interrupt-driven, and
+// BlockingSerialWritable. Run it after testUsart(): it sets the pins.
+void testSerial();
+
 // ADC1: calibration, VDDA from Vrefint, the libart-stm32
 // InternalTemperatureSensor, a two-rank sequence through GPDMA and
 // oversampling.
