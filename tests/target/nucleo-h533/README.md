@@ -26,11 +26,12 @@ Install these jumper wires before you start the test:
 | Wire | Pins | Connector pins | Used by |
 |------|------|----------------|---------|
 | 1 | PA8 – PB10 | D7 – D6 (CN9) | MCO1 (LSE) to TIM2_CH3: clock measurement |
-| 2 | PA9 – PA10 | CN10 – D2 (CN9) | GPIO direction switch, USART1 TX to RX, libart-stm32 serial classes |
+| 2 | PA9 – PA10 | CN10 pin 2 – CN10 pin 4 | GPIO direction switch, USART1 TX to RX, libart-stm32 serial classes |
 | 3 | PB15 – PB14 | CN10 pins 26 – 28 | SPI2 MOSI to MISO |
 
-The CN10 pin of PA9 changes with the board revision. Refer to UM3121, the
-user manual of the board.
+The pins of PA9 and PA10 are for board revision MB1814 C-01. On older
+revisions, PA10 is Arduino D2 and PA9 is on another CN10 pin. Refer to
+UM3121, the user manual of the board.
 
 A check that needs a missing wire fails. Its `FAIL` line names the wire. The
 other checks are not affected.
