@@ -104,7 +104,7 @@ void pend(IRQn_Type irq) {
 
 } // namespace
 
-void testClocks(bool clockOk) {
+void testClocks(bool clockOk, bool useHsi) {
    (void)vcp.printf("  SystemCoreClock %lu Hz, APB1 %lu, APB2 %lu, APB3 %lu, PLL1Q %lu\r\n",
                     static_cast<unsigned long>(SystemCoreClock), static_cast<unsigned long>(Rcc::getAPBClock()),
                     static_cast<unsigned long>(Rcc::getAPB2Clock()), static_cast<unsigned long>(Rcc::getAPB3Clock()),
@@ -128,9 +128,11 @@ void testClocks(bool clockOk) {
       (void)vcp.printf("  measured against LSE: core %lu Hz, TIM2 %lu Hz\r\n", static_cast<unsigned long>(coreHz),
                        static_cast<unsigned long>(timerHz));
    }
-   // LSE has 20 ppm. The DWT reads add some cycles of polling jitter.
-   check("core-clock-vs-lse", captured && within(coreHz, ExpectedCoreHz, 200), ClockWire);
-   check("tim2-clock-vs-lse", captured && within(timerHz, ExpectedCoreHz, 100), ClockWire);
+   // HSE and LSE have 20 ppm each. The DWT reads add some cycles of polling
+   // jitter. HSI has +-0.47 % at 30 C (DS14539), more over temperature.
+   const uint32_t ppm = useHsi ? 10000 : 100;
+   check("core-clock-vs-lse", captured && within(coreHz, ExpectedCoreHz, ppm + 100), ClockWire);
+   check("tim2-clock-vs-lse", captured && within(timerHz, ExpectedCoreHz, ppm), ClockWire);
 }
 
 void testTiming() {

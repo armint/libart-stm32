@@ -139,6 +139,8 @@ def board_report(log, results, timeout):
     lines = log.lines(0, summary)
     banners = [i for i, line in enumerate(lines) if line.startswith("BANNER")]
     first = banners[-1] if banners else 0
+    if banners:
+        print(f"host| report of: {lines[first]}", flush=True)
     uid = None
     for line in lines[first:]:
         match = CHECK_LINE.match(line)

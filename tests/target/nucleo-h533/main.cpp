@@ -53,7 +53,7 @@ int main() {
    const Pin key(GPIOC, 13);
    key.configure(Pin::Mode::Input);
 
-   const bool useHsi = key.read();
+   const bool useHsi = useHsiRecipe(key.read());
    const bool clockOk = useHsi ? Rcc::setClock250MhzHSI() : Rcc::setClock250MhzHSE();
    Rcc::enableICache();
    startCycleCounter();
@@ -63,7 +63,7 @@ int main() {
    (void)vcp.printf("\r\nBANNER libart-stm32 NUCLEO-H533RE hardware test, %s recipe\r\n", useHsi ? "HSI" : "HSE");
 
    testWatchdogReset();
-   testClocks(clockOk);
+   testClocks(clockOk, useHsi);
    testTiming();
    testInterrupts();
    testGpio();

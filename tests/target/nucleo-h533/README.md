@@ -59,7 +59,8 @@ if all checks pass.
 
 The image sets 250 MHz from the 24 MHz HSE crystal. To check the HSI recipe,
 hold the user button B1 while you push B2. Run the script one time for each
-recipe.
+recipe. The image reads B1 only at the first start and keeps the choice
+through the IWDG reset. The `BANNER` line names the recipe.
 
 ### Board output
 

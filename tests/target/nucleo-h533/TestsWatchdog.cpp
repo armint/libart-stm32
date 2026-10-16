@@ -21,6 +21,15 @@ void enableBackupRegisters() {
 
 } // namespace
 
+bool useHsiRecipe(bool buttonPressed) {
+   enableBackupRegisters();
+   if(TAMP->BKP0R == WatchdogArmed) {
+      return TAMP->BKP1R != 0; // second start: keep the choice of the first
+   }
+   TAMP->BKP1R = buttonPressed ? 1U : 0U;
+   return buttonPressed;
+}
+
 void testWatchdogReset() {
    const uint32_t resetFlags = RCC->RSR;
    RCC->RSR |= RCC_RSR_RMVF;

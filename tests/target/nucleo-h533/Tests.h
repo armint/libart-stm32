@@ -5,6 +5,11 @@
 
 namespace hwtest {
 
+// The recipe choice of B1 at the first start. The IWDG test resets the board
+// within 100 ms, so B1 is read once and kept in TAMP_BKP1R for the second
+// start. Call it before the clock setup.
+bool useHsiRecipe(bool buttonPressed);
+
 // IWDG: the first start arms a 40 ms watchdog and the board resets. The
 // second start checks the IWDG reset flag and the DBG freeze bit. A marker
 // in TAMP_BKP0R tells the two starts apart. Run it first.
@@ -16,8 +21,8 @@ void startWatchdog();
 
 // RCC: the 250 MHz recipe, the bus clocks, ICACHE, and the core clock and the
 // TIM2 clock measured against LSE (wire PA8-PB10). clockOk: the result of
-// Rcc::setClock250MhzHSE() or Rcc::setClock250MhzHSI().
-void testClocks(bool clockOk);
+// Rcc::setClock250MhzHSE() or Rcc::setClock250MhzHSI(). useHsi: the recipe.
+void testClocks(bool clockOk, bool useHsi);
 
 // SysTick and delayuS() against the DWT cycle counter.
 void testTiming();
