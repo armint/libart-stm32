@@ -99,7 +99,7 @@ After the summary, the main loop does these steps:
 | ADC1 | Power-up, calibration and enable. VDDA from Vrefint (3.0 V to 3.6 V). The libart-stm32 `InternalTemperatureSensor` (10 °C to 70 °C). A sequence of two ranks through GPDMA. Oversampling x16. |
 | libart-stm32 serial | `Serial` on USART1, interrupt-driven: 200 bytes out and back in. `BlockingSerialWritable` on USART1 with the FIFO. `Serial` on USART2 prints the whole report. |
 | USB | `usb-start` on the board. On the host: the configuration, the port with the board UID as serial number, DTR open and close, the echo of 1 to 4096 bytes (packet size limits included) and of 64 KiB. |
-| CRS | The clock recovery system (CRS) trims HSI48 from the USB start-of-frame packets (`SYNCOKF`). |
+| CRS | The clock recovery system (CRS) trims HSI48 from the USB start-of-frame packets (`SYNCOKF` or `SYNCWARNF`, no `ERRF`). |
 | VCP | The host sends a line on the VCP. The `Serial` RX interrupt path of the board echoes it. |
 
 ## Not covered
