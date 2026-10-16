@@ -45,8 +45,8 @@ void send(const uint8_t *data, size_t count) {
    }
 }
 
-// Sends `count` bytes before it reads one. Without the FIFO, more than two
-// bytes give an overrun.
+// Sends `count` bytes before it reads one. Without the FIFO, more than one
+// byte gives an overrun: RXNE is still set when the second byte arrives.
 bool burst(const uint8_t *data, size_t count) {
    send(data, count);
    if(!waitTransferComplete()) {
@@ -159,7 +159,7 @@ void testUsart() {
    check("usart1-kernel-clock-pclk", usart1.getClockFrequency() == Rcc::getAPB2Clock());
    startUsart1();
    const uint8_t pattern[8] = { 0x55, 0xA5, 0x00, 0xFF, 0x0F, 0xF0, 0x81, 0x7E };
-   check("usart1-loopback", burst(pattern, 2), UsartWire);
+   check("usart1-loopback", burst(pattern, 1), UsartWire);
    checkBaudRate("usart1-baud-rate-pclk", 10000);
 
    usart1.disable();
