@@ -26,29 +26,63 @@ Install these jumper wires before you start the test:
 | Wire | Pins | Connector pins | Used by |
 |------|------|----------------|---------|
 | 1 | PA8 – PB10 | D7 – D6 (CN9) | MCO1 (LSE) to TIM2_CH3: clock measurement |
-| 2 | PA9 – PA10 | CN10 | GPIO direction switch, USART1 TX to RX, libart-stm32 serial classes |
+| 2 | PA9 – PA10 | CN10 – D2 (CN9) | GPIO direction switch, USART1 TX to RX, libart-stm32 serial classes |
 | 3 | PB15 – PB14 | CN10 pins 26 – 28 | SPI2 MOSI to MISO |
+
+The CN10 pin of PA9 changes with the board revision. Refer to UM3121, the
+user manual of the board.
 
 A check that needs a missing wire fails. Its `FAIL` line names the wire. The
 other checks are not affected.
 
+The test also needs the 32.768 kHz LSE crystal X2 and the user USB port CN3.
+Both are on the board in the default configuration.
+
 ## Run
+
+The host script `hwtest.py` reads the report of the board and checks the
+USB part. It needs Python 3 and pyserial (`pip install pyserial`).
 
 1. Flash the `.hex` file, for example with STM32CubeProgrammer through the
    ST-LINK (CN1).
-2. Open the ST-LINK virtual COM port at 115200 8N1.
-3. Push the reset button B2.
+2. Connect CN1 and CN3 to the host.
+3. Start the script: `python3 hwtest.py`. If more than one ST-LINK is
+   connected, give the VCP port with `--vcp`, for example
+   `--vcp /dev/ttyACM0`.
+4. Push the reset button B2 when the script tells you to.
+
+The script prints the board lines with the prefix `board|` and its own checks
+with the prefix `host|`. At the end, it prints `RESULT <passed> passed,
+<failed> failed` and the name of each failed check. The exit code is 0 only
+if all checks pass.
 
 The image sets 250 MHz from the 24 MHz HSE crystal. To check the HSI recipe,
-hold the user button B1 while you push B2.
+hold the user button B1 while you push B2. Run the script one time for each
+recipe.
+
+### Board output
+
+You can also read the report without the script. Open the ST-LINK virtual
+COM port (VCP) at 115200 8N1 and push B2.
 
 The image prints one line per check, `PASS <name>` or `FAIL <name>`, and
 then `SUMMARY <passed> passed, <failed> failed`. Lines that start with two
-spaces give measured values. LD2 blinks at 1 Hz after the tests.
+spaces give measured values. The line `UID <hex>` gives the unique device ID.
+The USB serial number is the same text.
 
 The independent watchdog (IWDG) check resets the board once. Thus the
 `BANNER` line comes two times. The checks start after the second `BANNER`
-line. After the tests, the main loop reloads an IWDG with a 4 s timeout.
+line.
+
+After the summary, the main loop does these steps:
+
+- It runs a CDC-ACM device on CN3 with the pid.codes test ID `1209:0001`.
+  The device echoes each byte that it receives.
+- It prints the USB state changes, for example `USB configured` and
+  `USB terminal open`.
+- It prints the check `crs-sync-usb-sof` 0.5 s after the USB configuration.
+- It echoes each byte that it receives on the VCP.
+- It reloads an IWDG with a 4 s timeout. LD2 blinks at 1 Hz.
 
 ## Checks
 
@@ -66,3 +100,13 @@ line. After the tests, the main loop reloads an IWDG with a 4 s timeout.
 | SPI2 | The kernel clock (PLL1Q, 125 MHz). Frames of 8, 16 and 32 bits. `setTransferSize()` with EOT. 64 bytes TX and RX through GPDMA, and the SCK rate of that transfer. |
 | ADC1 | Power-up, calibration and enable. VDDA from Vrefint (3.0 V to 3.6 V). The libart-stm32 `InternalTemperatureSensor` (10 °C to 70 °C). A sequence of two ranks through GPDMA. Oversampling x16. |
 | libart-stm32 serial | `Serial` on USART1, interrupt-driven: 200 bytes out and back in. `BlockingSerialWritable` on USART1 with the FIFO. `Serial` on USART2 prints the whole report. |
+| USB | `usb-start` on the board. On the host: the configuration, the port with the board UID as serial number, DTR open and close, the echo of 1 to 4096 bytes (packet size limits included) and of 64 KiB. |
+| CRS | The clock recovery system (CRS) trims HSI48 from the USB start-of-frame packets (`SYNCOKF`). |
+| VCP | The host sends a line on the VCP. The `Serial` RX interrupt path of the board echoes it. |
+
+## Not covered
+
+- The HardFault diagnostics: they need a fault.
+- `power::PowerManager`: it has no STM32H5-specific code.
+- `I2cMaster` and `power::TicklessIdleHook`: the build leaves them out on
+  STM32H5.

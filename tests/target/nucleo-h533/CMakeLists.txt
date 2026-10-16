@@ -14,7 +14,8 @@ add_executable(${_name}
         TestsSerial.cpp
         TestsSpi.cpp
         TestsUsart.cpp
-        TestsWatchdog.cpp)
+        TestsWatchdog.cpp
+        Usb.cpp)
 target_link_libraries(${_name} PRIVATE art-build-config art::core system-stm32 art-stm32)
 target_compile_options(${_name} PRIVATE -Wall -Wextra -Wpedantic -Werror)
 target_link_options(${_name} PRIVATE

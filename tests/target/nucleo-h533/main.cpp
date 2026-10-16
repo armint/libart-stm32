@@ -5,11 +5,13 @@
 // It sets 250 MHz from the 24 MHz HSE crystal. Hold B1 (PC13) during reset
 // to use the HSI recipe instead. Then it runs the test groups of Tests.h and
 // prints one line per check on the ST-LINK virtual COM port (USART2, 115200
-// 8N1). The IWDG test resets the board once. LD2 (PA5) blinks at 1 Hz in the
-// main loop, which reloads a 4 s IWDG.
+// 8N1). The IWDG test resets the board once. The main loop runs a CDC-ACM
+// echo on USB (CN3) and echoes the VCP input. LD2 (PA5) blinks at 1 Hz in
+// the main loop, which reloads a 4 s IWDG.
 #include "Board.h"
 #include "Report.h"
 #include "Tests.h"
+#include "Usb.h"
 
 #include <cmsis_device.h>
 
@@ -26,6 +28,21 @@ using namespace hwtest;
 timestamp_t timestamp_in_ms() {
    return getUptimeTicks();
 }
+
+namespace {
+// hwtest.py sends a line on the VCP and expects it back: a check of the RX
+// interrupt path of Serial.
+void echoVcp() {
+   while(vcp.available()) {
+      const auto byte = vcp.read();
+      if(!byte) {
+         break;
+      }
+      const auto c = static_cast<uint8_t>(*byte);
+      (void)vcp.write(art::span<const uint8_t>(&c, 1u));
+   }
+}
+} // namespace
 
 int main() {
    Rcc::enableGPIOAClock();
@@ -55,12 +72,15 @@ int main() {
    testSerial();
    testSpi();
    testAdc();
+   check("usb-start", startUsb());
    startWatchdog();
    printSummary();
 
    const hw::Iwdg iwdg(IWDG);
    timestamp_t nextBlink = getUptimeTicks() + 500U;
    for(;;) {
+      pollUsb();
+      echoVcp();
       if(getUptimeTicks() >= nextBlink) {
          nextBlink += 500U;
          led.write(!led.read());
