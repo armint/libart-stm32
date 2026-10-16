@@ -61,5 +61,6 @@ line. After the tests, the main loop reloads an IWDG with a 4 s timeout.
 | Interrupts | `Interrupt::connectHandler()` on the last vector (I3C2_ER, IRQ 132), the handler with an argument, and `BlockingSection` on an IRQ number above 127. |
 | GPIO | PB13 (UCPD CC1) reads low with the pull-up until `hw::Pwr::disableUcpdDeadBattery()`. `GpioPin` output and input. `FastPin::setInput()` and `FastPin::setOutput()`. |
 | USART1 | The kernel clock mux (PCLK and HSI) and `getClockFrequency()`. The baud rate (1 Mbit/s), measured with the DWT for each kernel clock. The FIFO: 8 bytes without an overrun. |
+| GPDMA memory | A single block. Packing from 8 to 32 bits and unpacking from 32 to 8 bits. A linked list of two items. The transfer complete interrupt. |
 | GPDMA with USART1 | 64 bytes TX and RX at the same time. `Channel::abort()` after 16 of 64 bytes, then a new transfer on the same channel. |
 | SPI2 | The kernel clock (PLL1Q, 125 MHz). Frames of 8, 16 and 32 bits. `setTransferSize()` with EOT. 64 bytes TX and RX through GPDMA, and the SCK rate of that transfer. |

@@ -8,6 +8,7 @@ add_executable(${_name}
         Board.cpp
         Report.cpp
         TestsClock.cpp
+        TestsDma.cpp
         TestsGpio.cpp
         TestsSpi.cpp
         TestsUsart.cpp

@@ -30,6 +30,10 @@ void testInterrupts();
 // direction switch (wire PA9-PA10).
 void testGpio();
 
+// GPDMA memory-to-memory: a single block, packing between data widths, a
+// linked list and the transfer complete interrupt.
+void testDma();
+
 // USART1 (wire PA9-PA10): the kernel clock mux, the baud rate measured with
 // PCLK and with HSI, the FIFO, GPDMA TX and RX, and a GPDMA abort.
 void testUsart();
