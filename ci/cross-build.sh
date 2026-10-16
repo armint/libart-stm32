@@ -43,11 +43,8 @@ cmake -S "$ROOT/ci" -B "$BUILD" -G "Unix Makefiles" \
    -D SYSTEM_STM32_DIR="$SYSTEM_STM32_DIR" \
    ${EXTRA_CMAKE_ARGS:-}
 
-# The images that ci/CMakeLists.txt adds for this device and standard.
-images="$(make -C "$BUILD" help | sed -n 's/^\.\.\. \(cdc-echo-[a-z0-9-]*\)$/\1/p')"
-
 if [ -z "${KNOWN_GAPS:-}" ]; then
-   cmake --build "$BUILD" --target art-stm32 span-type-check $images -j"$(nproc)"
+   cmake --build "$BUILD" --target art-stm32 span-type-check ci-images -j"$(nproc)"
 else
    : "${KNOWN_GAP_PATTERN:?KNOWN_GAPS needs KNOWN_GAP_PATTERN}"
    status=0
