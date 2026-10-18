@@ -82,13 +82,21 @@ uint32_t timeTransmit(size_t count) {
    return done ? elapsed : 0;
 }
 
+// The time to send a burst has a fixed offset of about one byte time
+// (measured on hardware). The difference between a long and a short burst
+// cancels it, so only the bytes in between are timed.
 bool checkBaudRate(const char *name, uint32_t ppm) {
-   constexpr size_t Bytes = 32;
-   const uint32_t elapsed = timeTransmit(Bytes);
-   const uint32_t expected = Bytes * 10U * (SystemCoreClock / Baud);
-   (void)vcp.printf("  %s: %lu cycles for %u bytes, expected %lu\r\n", name, static_cast<unsigned long>(elapsed),
-                    static_cast<unsigned>(Bytes), static_cast<unsigned long>(expected));
-   return check(name, within(elapsed, expected, ppm));
+   constexpr size_t ShortBytes = 8;
+   constexpr size_t LongBytes = 32;
+   const uint32_t shortCycles = timeTransmit(ShortBytes);
+   const uint32_t longCycles = timeTransmit(LongBytes);
+   const uint32_t elapsed = longCycles - shortCycles;
+   const uint32_t expected = (LongBytes - ShortBytes) * 10U * (SystemCoreClock / Baud);
+   (void)vcp.printf("  %s: %lu cycles for %u bytes (%lu for %u), expected %lu\r\n", name,
+                    static_cast<unsigned long>(elapsed), static_cast<unsigned>(LongBytes - ShortBytes),
+                    static_cast<unsigned long>(longCycles), static_cast<unsigned>(LongBytes),
+                    static_cast<unsigned long>(expected));
+   return check(name, shortCycles != 0 && longCycles > shortCycles && within(elapsed, expected, ppm));
 }
 
 alignas(4) uint8_t txData[64];
