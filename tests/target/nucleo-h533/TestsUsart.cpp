@@ -82,21 +82,24 @@ uint32_t timeTransmit(size_t count) {
    return done ? elapsed : 0;
 }
 
-// The time to send a burst has a fixed offset of about one byte time
-// (measured on hardware). The difference between a long and a short burst
-// cancels it, so only the bytes in between are timed.
+// Issue #25: a 32-byte burst with the HSI kernel clock took one byte time
+// too long. Whether the offset is per burst or once after start-up is not
+// known. A discarded warm-up burst absorbs a start-up offset. The difference
+// of a long and a short burst cancels an offset that is the same per burst.
 bool checkBaudRate(const char *name, uint32_t ppm) {
    constexpr size_t ShortBytes = 8;
    constexpr size_t LongBytes = 32;
+   (void)timeTransmit(1);
    const uint32_t shortCycles = timeTransmit(ShortBytes);
    const uint32_t longCycles = timeTransmit(LongBytes);
-   const uint32_t elapsed = longCycles - shortCycles;
+   const bool valid = shortCycles != 0 && longCycles > shortCycles;
+   const uint32_t elapsed = valid ? longCycles - shortCycles : 0;
    const uint32_t expected = (LongBytes - ShortBytes) * 10U * (SystemCoreClock / Baud);
-   (void)vcp.printf("  %s: %lu cycles for %u bytes (%lu for %u), expected %lu\r\n", name,
-                    static_cast<unsigned long>(elapsed), static_cast<unsigned>(LongBytes - ShortBytes),
+   (void)vcp.printf("  %s: %lu cycles for %u bytes, %lu for %u bytes, expected difference %lu\r\n", name,
+                    static_cast<unsigned long>(shortCycles), static_cast<unsigned>(ShortBytes),
                     static_cast<unsigned long>(longCycles), static_cast<unsigned>(LongBytes),
                     static_cast<unsigned long>(expected));
-   return check(name, shortCycles != 0 && longCycles > shortCycles && within(elapsed, expected, ppm));
+   return check(name, valid && within(elapsed, expected, ppm));
 }
 
 alignas(4) uint8_t txData[64];
