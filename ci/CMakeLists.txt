@@ -42,9 +42,11 @@ target_include_directories(span-type-check PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.
 # The images of this device and standard. ci/cross-build.sh builds them.
 add_custom_target(ci-images)
 
-# The CDC echo image of the NUCLEO-H533RE. It uses C++20 designated
-# initializers for the USB descriptors, so it builds from C++20 on.
+# The CDC echo image and the hardware test image of the NUCLEO-H533RE. They
+# use C++20 designated initializers for the USB descriptors, so they build
+# from C++20 on.
 if (STM32_DEVICE STREQUAL "STM32H533xx" AND CMAKE_CXX_STANDARD GREATER_EQUAL 20)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../examples/nucleo-h533-cdc-echo examples/nucleo-h533-cdc-echo)
-    add_dependencies(ci-images cdc-echo-nucleo-h533)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../tests/target/nucleo-h533 tests/target/nucleo-h533)
+    add_dependencies(ci-images cdc-echo-nucleo-h533 hwtest-nucleo-h533)
 endif ()

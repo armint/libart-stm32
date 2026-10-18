@@ -1,0 +1,60 @@
+#pragma once
+
+// Test groups of the hardware test image. Each group prints its results with
+// check() (Report.h). main.cpp runs them in this order.
+
+namespace hwtest {
+
+// The recipe choice of B1 at the first start. The IWDG test resets the board
+// within 100 ms, so B1 is read once and kept in TAMP_BKP1R for the second
+// start. Call it before the clock setup.
+bool useHsiRecipe(bool buttonPressed);
+
+// IWDG: the first start arms a 40 ms watchdog and the board resets. The
+// second start checks the IWDG reset flag and the DBG freeze bit. A marker
+// in TAMP_BKP0R tells the two starts apart. Run it first.
+void testWatchdogReset();
+
+// Starts the IWDG of the main loop (prescaler /1024, 4 s) and checks the
+// prescaler. The main loop reloads it with hw::Iwdg::reload().
+void startWatchdog();
+
+// RCC: the 250 MHz recipe, the bus clocks, ICACHE, and the core clock and the
+// TIM2 clock measured against LSE (wire PA8-PB10). clockOk: the result of
+// Rcc::setClock250MhzHSE() or Rcc::setClock250MhzHSI(). useHsi: the recipe.
+void testClocks(bool clockOk, bool useHsi);
+
+// SysTick and delayuS() against the DWT cycle counter.
+void testTiming();
+
+// Interrupt::connectHandler() on the last vector, the handler with an
+// argument, and BlockingSection on an IRQ number above 127.
+void testInterrupts();
+
+// GPIO: the UCPD dead-battery disable (PB13), GpioPin and the FastPin
+// direction switch (wire PA9-PA10).
+void testGpio();
+
+// GPDMA memory-to-memory: a single block, packing between data widths, a
+// linked list and the transfer complete interrupt.
+void testDma();
+
+// USART1 (wire PA9-PA10): the kernel clock mux, the baud rate measured with
+// PCLK and with HSI, the FIFO, GPDMA TX and RX, and a GPDMA abort.
+void testUsart();
+
+// SPI2 master (wire PB15-PB14): the kernel clock, 8/16/32-bit frames, TSIZE
+// and EOT, GPDMA TX and RX, and the SCK rate. Run it after testGpio(): PB13
+// and PB14 need the UCPD dead-battery disable.
+void testSpi();
+
+// libart-stm32 on USART1 (wire PA9-PA10): Serial, interrupt-driven, and
+// BlockingSerialWritable. Run it after testUsart(): it sets the pins.
+void testSerial();
+
+// ADC1: calibration, VDDA from Vrefint, the libart-stm32
+// InternalTemperatureSensor, a two-rank sequence through GPDMA and
+// oversampling.
+void testAdc();
+
+} // namespace hwtest

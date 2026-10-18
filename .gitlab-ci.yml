@@ -99,10 +99,12 @@ cross-build:
   before_script: *private-dependencies
   script:
     - ci/cross-build.sh
-  # The CDC echo image of the NUCLEO-H533RE, ready to flash.
+  # The CDC echo image and the hardware test image of the NUCLEO-H533RE,
+  # ready to flash.
   artifacts:
     paths:
       - build-ci/*/examples/*/*.hex
+      - build-ci/*/tests/target/*/*.hex
     expire_in: 30 days
 
 # STM32C0 does not build yet, at both standards, because of known gaps:
