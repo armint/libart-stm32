@@ -34,11 +34,20 @@ class BoardLog(threading.Thread):
         self._port = port
         self._lines = []
         self._condition = threading.Condition()
+        self._stop = threading.Event()
+
+    def stop(self):
+        """Ends the thread before the caller closes the port."""
+        self._stop.set()
+        self.join(2.0)
 
     def run(self):
         pending = b""
-        while True:
-            data = self._port.read(256)
+        while not self._stop.is_set():
+            try:
+                data = self._port.read(256)
+            except (serial.SerialException, TypeError, OSError):
+                return  # the port is closed
             if not data:
                 continue
             pending += data
@@ -158,6 +167,18 @@ def test_vcp_echo(log, vcp, results):
     results.add("host", "vcp-echo", log.wait_for(re.escape(token), start, 2.0) is not None)
 
 
+def open_cdc(device, timeout):
+    """Opens the CDC port. udev needs a moment to set its permissions after enumeration."""
+    end = time.monotonic() + timeout
+    while True:
+        try:
+            return serial.Serial(device, timeout=0.5)
+        except serial.SerialException:
+            if time.monotonic() >= end:
+                raise
+            time.sleep(0.2)
+
+
 def test_usb(log, results, summary, uid):
     configured = log.wait_for(r"^USB configured", summary, 10.0)
     results.add("host", "usb-configured", configured is not None, "connect CN3 to this host")
@@ -166,7 +187,12 @@ def test_usb(log, results, summary, uid):
                        f"no port {TEST_VID:04x}:{TEST_PID:04x} with serial number {uid}"):
         return
     start = log.count()
-    with serial.Serial(device, timeout=0.5) as port:
+    try:
+        port = open_cdc(device, 3.0)
+    except serial.SerialException as error:
+        results.add("host", "usb-open", False, str(error))
+        return
+    with port:
         port.dtr = True
         results.add("host", "usb-dtr-open", log.wait_for(r"^USB terminal open", start, 3.0) is not None)
         time.sleep(0.1)
@@ -208,6 +234,7 @@ def main():
             # Last: no other board output can split the echoed line now.
             time.sleep(0.2)
             test_vcp_echo(log, vcp, results)
+        log.stop()
 
     failed = results.failed()
     print(f"\nRESULT {len(results.items) - len(failed)} passed, {len(failed)} failed")
