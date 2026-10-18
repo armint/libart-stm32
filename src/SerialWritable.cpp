@@ -44,7 +44,8 @@ void SerialWritable::releaseOrArmTransferComplete() {
     // to transmit.
     txSleepLock_.reset();
   } else if (txSleepLock_) {
-    uart_.clearTxCompleteFlag();
+    // No flag clear here: the last data write already cleared TC, and a clear
+    // after the frame ended would drop the edge and leak the sleep lock.
     uart_.enableTxCompleteInterrupt();
   }
 }
@@ -178,6 +179,15 @@ art::expected<void, Writable::Error> SerialWritable::flush() {
     guard.emplace(*txSync_);
   }
   return flushUnlocked(txBuffer.size(), canBlock());
+}
+
+bool SerialWritable::isTransmitting() const {
+  Interrupt::CriticalSection cs;
+  // The lock is held while the TC interrupt is armed. A polled write in a
+  // context where that interrupt cannot run leaves it held after the line is
+  // idle, so also check the hardware once the ring is empty.
+  return txSleepLock_.has_value() &&
+         !(txBuffer.empty() && uart_.isTransferComplete());
 }
 
 art::expected<size_t, Writable::Error>

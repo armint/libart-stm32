@@ -241,6 +241,34 @@ TEST_CASE("the sleep lock is held until the last byte has left the shift "
   CHECK(pm.getLockCount(power::SleepMode::Sleep) == 0);
 }
 
+TEST_CASE("isTransmitting stays true after flush until the last frame is out") {
+  Fixture f;
+  const std::array<uint8_t, 2> data{7, 8};
+  f.sync.onWait = [&](uint32_t) { f.drainUntilNotified(RING_CAPACITY); };
+  CHECK_FALSE(f.serial.isTransmitting());
+
+  REQUIRE(f.serial.write(data).has_value());
+  CHECK(f.serial.isTransmitting());
+
+  REQUIRE(f.serial.flush().has_value());
+  CHECK(f.serial.isTransmitting());
+
+  f.uart.transferComplete = true;
+  f.serial.handleTxInterrupt();
+  CHECK_FALSE(f.serial.isTransmitting());
+}
+
+TEST_CASE("isTransmitting ends without the interrupt when TC is set") {
+  Fixture f;
+  const std::array<uint8_t, 2> data{7, 8};
+  f.sync.blockingAllowed = false; // polled path, as in an ISR
+  REQUIRE(f.serial.write(data).has_value());
+  REQUIRE(f.serial.flush().has_value());
+  CHECK(f.serial.isTransmitting());
+  f.uart.transferComplete = true;
+  CHECK_FALSE(f.serial.isTransmitting());
+}
+
 TEST_CASE("a writer waiting for space is woken at the low-water mark") {
   Fixture f;
   size_t poppedDuringWait = 0;

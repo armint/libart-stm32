@@ -86,7 +86,25 @@ public:
   ~SerialWritable() override;
 
   art::expected<size_t, Error> write(art::span<const uint8_t> data) override;
+  /**
+   * Returns when the last byte is in the USART data register. It does not wait
+   * for the last frame to leave the line. To wait for the line to go idle (for
+   * example before a reset, a sleep or a baud-rate change), call flush() and
+   * then poll isTransmitting().
+   */
   art::expected<void, Error> flush() override;
+
+  /**
+   * True from the first queued byte until the last frame has left the line.
+   * It follows the sleep lock, which the TX-complete interrupt releases, and
+   * it also reports false once the ring is empty and the USART TC flag is set.
+   * Thus it ends in contexts where that interrupt cannot run (ISR, masked
+   * interrupts). After a failed or timed-out write or flush the driver drops
+   * the lock while bytes may still be queued, so it returns false then.
+   * Another writer can keep the line busy: hold a WriteSession and limit the
+   * poll time. Safe to call from any context.
+   */
+  [[nodiscard]] bool isTransmitting() const;
 
   // To be called from the device ISR
   void handleTxInterrupt();
