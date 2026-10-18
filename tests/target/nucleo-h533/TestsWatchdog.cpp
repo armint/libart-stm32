@@ -46,8 +46,9 @@ void testWatchdogReset() {
 
    (void)vcp.printf("  iwdg: 40 ms watchdog, the board resets now\r\n");
    (void)vcp.flush();
-   while(!vcp.uart().isTransferComplete()) {
-   }
+   // Not a poll of the TC flag: the Serial ISR clears it, so the poll can
+   // hang. The last frame takes 87 us at 115200 baud.
+   delaymS(20);
    TAMP->BKP0R = WatchdogArmed;
    const hw::Iwdg iwdg(IWDG);
    iwdg.enable();
