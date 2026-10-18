@@ -180,6 +180,11 @@ art::expected<void, Writable::Error> SerialWritable::flush() {
   return flushUnlocked(txBuffer.size(), canBlock());
 }
 
+bool SerialWritable::isTransmitting() const {
+  Interrupt::CriticalSection cs;
+  return txSleepLock_.has_value();
+}
+
 art::expected<size_t, Writable::Error>
 SerialWritable::writeUnlocked(art::span<const uint8_t> data, bool blocking) {
   for (size_t i = 0; i < data.size(); i++) {
