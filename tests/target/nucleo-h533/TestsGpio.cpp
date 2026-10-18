@@ -70,7 +70,8 @@ void testGpio() {
    const bool readLow = !Pa9::read();
    Pa9::setOutput();
    const bool isOutput = pa9Mode() == 1U;
-   check("fastpin-set-input-set-output", isInput && isOutput && readHigh && readLow, GpioWire);
+   check("fastpin-direction-moder", isInput && isOutput);
+   check("fastpin-input-reads-pa10", readHigh && readLow, GpioWire);
 
    pa10.configure(Pin::Mode::Analog);
    Pa9::pin().configure(Pin::Mode::Analog);
