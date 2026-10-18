@@ -96,9 +96,13 @@ public:
 
   /**
    * True from the first queued byte until the last frame has left the line.
-   * It follows the sleep lock, which the TX-complete interrupt releases. It
-   * does not read the USART TC flag, so it stays valid when the interrupt
-   * handler has cleared that flag. Safe to call from any context.
+   * It follows the sleep lock, which the TX-complete interrupt releases, and
+   * it also reports false once the ring is empty and the USART TC flag is set.
+   * Thus it ends in contexts where that interrupt cannot run (ISR, masked
+   * interrupts). After a failed or timed-out write or flush the driver drops
+   * the lock while bytes may still be queued, so it returns false then.
+   * Another writer can keep the line busy: hold a WriteSession and limit the
+   * poll time. Safe to call from any context.
    */
   [[nodiscard]] bool isTransmitting() const;
 
