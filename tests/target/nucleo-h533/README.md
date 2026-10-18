@@ -29,6 +29,10 @@ Install these jumper wires before you start the test:
 | 2 | PA9 – PA10 | CN10 pin 2 – CN10 pin 4 | GPIO direction switch, USART1 TX to RX, libart-stm32 serial classes |
 | 3 | PB15 – PB14 | CN10 pins 26 – 28 | SPI2 MOSI to MISO |
 
+The image holds PB12 (SPI2 NSS, CN10 pin 16) low with a pull-down. Do not
+connect CN10 pin 16. The SPI2 check shows that the driver does not depend on
+the level of the NSS pin.
+
 A check that needs a missing wire fails. Its `FAIL` line names the wire. The
 other checks are not affected.
 
