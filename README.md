@@ -262,7 +262,7 @@ loop cannot make progress.
 
 A terminal session starts when the host sets DTR. It ends when the host
 clears DTR. The CDC-ACM function does not clear its queues at the end of a
-session ([libart#48](https://gitlab.vandertogt.org/embedded-libraries/libart/-/issues/48)).
+session (libArT issue 48 on the GitLab of the maintainers, not public).
 `UsbSerial` handles the RX side, but not the TX side:
 
 - RX: while no terminal is open, `read()` and `available()` discard the
@@ -294,19 +294,27 @@ Then CMake also downloads span-compat, at the version that libArT specifies.
 
 ## Continuous integration
 
-The CI pipeline (`.gitlab-ci.yml`) clones libArT and system-stm32 (branch
-`dev`) next to this repository. It has these jobs:
+Two CI systems run the same jobs. Each clones libArT and system-stm32 (branch
+`main`) next to this repository:
+
+| System | File | Runs on | Clones from | Arm GCC |
+|---|---|---|---|---|
+| GitHub Actions | `.github/workflows/ci.yml` | Each pull request and each push to `main` | github.com/armint | 15.3 (`ghcr.io/armint/firmware-build-image:v1.15.0`) |
+| GitLab CI | `.gitlab-ci.yml` | The mirror of `main`, and branches that you push to GitLab | GitLab, with the CI job token | 14.3 (`firmware-builder:v1.14.0`) |
+
+On GitHub, STM32C031xx is a cell of `cross-build` with the same known gap.
+The jobs are:
 
 - `unit-tests`: the host tests at C++23 and at C++17.
 - `cross-build`: a build of `art-stm32` for STM32L073xx, STM32G071xx,
   STM32G0B1xx, STM32F103xB and STM32H533xx, at C++23 and at C++17. The
   sources of this repository must compile with
-  `-Wall -Wextra -Wpedantic -Werror`. The STM32H533xx job also builds the
-  CDC echo image at C++23 (see [STM32H5](#stm32h5)). The job keeps the
-  `.hex` file as an artifact.
+  `-Wall -Wextra -Wpedantic -Werror`. The STM32H533xx job at C++23 also
+  builds the CDC echo image and the hardware test image (see
+  [STM32H5](#stm32h5)), and keeps both `.hex` files as an artifact
+  (`nucleo-h533-images` on GitHub).
 - `cross-build-c0`: the same build for STM32C031xx. One known gap prevents a
-  full build:
-  [#19](https://gitlab.vandertogt.org/embedded-libraries/libart-stm32/-/issues/19)
+  full build, issue 19 on the GitLab of the maintainers, not public
   (`InternalTemperatureSensor.cpp`). On `STM32C0`, the build leaves out
   `power/TicklessIdleHook`, because STM32C0 has no RTC wake-up timer.
   `InternalTemperatureSensor.cpp` can fail only with the known errors
@@ -315,7 +323,7 @@ The CI pipeline (`.gitlab-ci.yml`) clones libArT and system-stm32 (branch
   compile, or if system-stm32 does not build. The job prints a note when the
   gap is fixed.
 
-The CI pipeline uses the latest `dev` commit of libArT and system-stm32. The
+The CI pipeline uses the latest `main` commit of libArT and system-stm32. The
 job log shows the commits that it used.
 
 Each job checks that the build used the intended standard and span type.
@@ -331,3 +339,8 @@ ci/cross-build.sh
 ```
 
 The script header describes the other variables.
+
+## Contributing
+
+The repository has one branch: `main`. All work, bug fixes too, goes to `main` through a pull request on
+[GitHub](https://github.com/armint/libart-stm32). Use a tag or a commit of `main` in your submodule.
