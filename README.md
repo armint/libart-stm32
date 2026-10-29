@@ -295,7 +295,7 @@ Then CMake also downloads span-compat, at the version that libArT specifies.
 ## Continuous integration
 
 The CI pipeline (`.gitlab-ci.yml`) clones libArT and system-stm32 (branch
-`dev`) next to this repository. It has these jobs:
+`main`) next to this repository. It has these jobs:
 
 - `unit-tests`: the host tests at C++23 and at C++17.
 - `cross-build`: a build of `art-stm32` for STM32L073xx, STM32G071xx,
@@ -315,7 +315,7 @@ The CI pipeline (`.gitlab-ci.yml`) clones libArT and system-stm32 (branch
   compile, or if system-stm32 does not build. The job prints a note when the
   gap is fixed.
 
-The CI pipeline uses the latest `dev` commit of libArT and system-stm32. The
+The CI pipeline uses the latest `main` commit of libArT and system-stm32. The
 job log shows the commits that it used.
 
 Each job checks that the build used the intended standard and span type.

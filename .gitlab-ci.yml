@@ -5,8 +5,8 @@ image: "docker.vandertogt.org/firmware-builder:v1.14.0"
 
 variables:
   # Branches of the dependencies that CI clones next to this repository.
-  LIBART_REF: dev
-  SYSTEM_STM32_REF: dev
+  LIBART_REF: main
+  SYSTEM_STM32_REF: main
   # One place for the toolchain location (as in system-stm32).
   GCC_TOOLCHAIN_PREFIX: /opt/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi
 
@@ -31,7 +31,7 @@ workflow:
       "https://${CI_SERVER_HOST}/embedded-libraries/libart.git" "${CI_PROJECT_DIR}/../libArT"
   - git clone --branch "$SYSTEM_STM32_REF"
       "https://${CI_SERVER_HOST}/embedded-libraries/system-stm32.git" "${CI_PROJECT_DIR}/../system-stm32"
-  # The refs follow dev. The log shows the commits of this run.
+  # The refs follow main. The log shows the commits of this run.
   - git -C "${CI_PROJECT_DIR}/../libArT" log -1 --format='libArT %H %s'
   - git -C "${CI_PROJECT_DIR}/../system-stm32" log -1 --format='system-stm32 %H %s'
 
