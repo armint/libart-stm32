@@ -331,3 +331,8 @@ ci/cross-build.sh
 ```
 
 The script header describes the other variables.
+
+## Contributing
+
+The repository has one branch: `main`. All work, bug fixes too, goes to `main` through a pull request on
+[GitHub](https://github.com/armint/libart-stm32). Use a tag or a commit of `main` in your submodule.
