@@ -1,6 +1,107 @@
-# LibArt-STM32
+# libart-stm32
 
-LibArT implementations specifically for stm32 targets
+libart-stm32 connects the hardware-independent interfaces of
+[libArT](https://gitlab.vandertogt.org/embedded-libraries/libart) to the
+STM32 peripheral drivers of
+[system-stm32](https://gitlab.vandertogt.org/embedded-libraries/system-stm32).
+libArT defines interfaces such as `Readable`, `Writable`, `TemperatureSensor`
+and the USB device stack. system-stm32 gives register-level drivers such as
+`hw::Usart` and `hw::UsbDevice`. This library implements the libArT
+interfaces on these drivers. Thus firmware code can use the libArT interfaces
+and does not depend on one STM32 family.
+
+## Contents
+
+| Component | Headers | Function |
+|-----------|---------|----------|
+| Serial port | `Serial.h`, `SerialReadable.h`, `SerialWritable.h` | Interrupt-driven USART with RX and TX ring buffers. It is a `Readable` and a `Writable`. |
+| Blocking serial output | `BlockingSerialWritable.h` | A `Writable` that polls the USART without interrupts. Use it for diagnostics and early bring-up. |
+| TX synchronization | `SerialTxSync.h` | An interface that lets `SerialWritable` block on an RTOS while the TX buffer drains. The application supplies the implementation. |
+| I2C master | `I2cMaster.h` | Blocking I2C master on `hw::I2c`, with a timeout. |
+| Power management | `power/PowerManager.h`, `power/SleepLock.h`, `power/TicklessIdleHook.h` | Reference counts of sleep-mode locks, and an RTOS-agnostic tickless idle hook. |
+| Temperature sensor | `sensors/InternalTemperatureSensor.h` | A libArT `TemperatureSensor` on the internal temperature sensor of the STM32. |
+| USB device | `usb/Stm32UsbDeviceController.h`, `usb/UsbSerial.h` | The USB device controller for the libArT USB stack, and a serial port on CDC-ACM. See [USB device controller](#usb-device-controller) and [USB serial](#usb-serial). |
+
+Not all components exist on all families. See [STM32F1](#stm32f1) and
+[STM32H5](#stm32h5). The CI pipeline builds the library for STM32L0,
+STM32G0, STM32F1 and STM32H5 (see
+[Continuous integration](#continuous-integration)).
+
+## Usage
+
+### Dependencies
+
+The library needs these items:
+
+- [libArT](https://gitlab.vandertogt.org/embedded-libraries/libart), CMake
+  target `art::core`.
+- [system-stm32](https://gitlab.vandertogt.org/embedded-libraries/system-stm32),
+  CMake target `system-stm32`. system-stm32 also supplies the toolchain file
+  (`cmake/gcc_arm.cmake`), the start-up code and the linker scripts.
+- An `arm-none-eabi` GCC toolchain and CMake 3.20 or later.
+- At C++17 only: span-compat. libArT and system-stm32 fetch it (see
+  [Language standard](#language-standard)).
+
+### Add the library to a firmware project
+
+Put libArT, system-stm32 and libart-stm32 in the source tree of the firmware
+project, for example as git submodules in `dependencies/`. Add libArT and
+system-stm32 before this library, because this library links their targets.
+Then link your executable with `art::stm32`:
+
+```cmake
+# Configure with -D CMAKE_TOOLCHAIN_FILE=dependencies/system-stm32/cmake/gcc_arm.cmake
+set(CMAKE_CXX_STANDARD 23)
+set(STM32_FAMILY "STM32G0" CACHE STRING "STM32 family")
+set(STM32_DEVICE "STM32G071xx" CACHE STRING "CMSIS device")
+
+add_subdirectory(dependencies/libArT)
+add_subdirectory(dependencies/system-stm32)
+add_subdirectory(dependencies/libart-stm32)
+
+add_executable(firmware.elf src/main.cpp)
+target_link_libraries(firmware.elf PRIVATE art::stm32)
+```
+
+`STM32_FAMILY` and `STM32_DEVICE` are system-stm32 variables. The system-stm32
+README gives the supported values and the other settings, for example the
+clock and the linker script. `ci/CMakeLists.txt` is a full example of such a
+superproject.
+
+If the superproject defines an interface target `art-build-config`, the
+library compiles with its compile options and definitions. Use it to give
+all libraries the same flags, for example `-fno-exceptions`.
+
+### Example: serial port
+
+`Serial` uses ring buffers that the application owns. Configure the pins and
+the USART, and connect the USART interrupt to `Serial::handleInterrupt()`:
+
+```cpp
+#include <Serial.h>
+#include <utils/Interrupt.h>
+#include <utils/RingBuffer.h>
+
+RingBuffer<uint8_t, 64> txBuffer;
+RingBuffer<uint8_t, 128> rxBuffer;
+Serial serial(USART2, txBuffer, rxBuffer);
+
+void initSerial() {
+   // Configure the TX and RX pins as alternate function (hw::GpioPin).
+   auto &uart = serial.uart();
+   uart.configure(115200, Usart::Parity::None, Usart::StopBits::StopBits_1);
+   uart.enableTx();
+   uart.enableRx();
+   uart.enableRxNotEmptyInterrupt();
+   uart.enable();
+
+   Interrupt::connectMemberHandler<Serial, &Serial::handleInterrupt>(USART2_IRQn, serial);
+   NVIC_EnableIRQ(USART2_IRQn);
+}
+```
+
+Then use `serial` as any libArT `Readable` or `Writable`, for example as the
+`LogManager` sink. For the USB serial port, see [USB serial](#usb-serial).
 
 ## Language standard
 
@@ -344,3 +445,7 @@ The script header describes the other variables.
 
 The repository has one branch: `main`. All work, bug fixes too, goes to `main` through a pull request on
 [GitHub](https://github.com/armint/libart-stm32). Use a tag or a commit of `main` in your submodule.
+
+## License
+
+libart-stm32 is available under the MIT license. See [LICENSE](LICENSE).
