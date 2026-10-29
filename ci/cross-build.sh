@@ -63,6 +63,8 @@ else
    objects="$BUILD/libart-stm32/CMakeFiles/art-stm32.dir"
    while read -r source; do
       relative="${source#"$ROOT/"}"
+      # CMakeLists.txt leaves out some sources for some families.
+      grep -qF "art-stm32.dir/$relative.obj:" "$objects/build.make" || continue
       gap=0
       for known in $KNOWN_GAPS; do
          [ "src/$known" = "$relative" ] && gap=1
