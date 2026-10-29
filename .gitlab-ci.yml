@@ -107,22 +107,18 @@ cross-build:
       - build-ci/*/tests/target/*/*.hex
     expire_in: 30 days
 
-# STM32C0 does not build yet, at both standards, because of known gaps:
-#  - system-stm32 does not build for C0 (embedded-libraries/system-stm32#27).
-#    The job builds it, ignores the result and prints a NOTE when it builds
-#    (SYSTEM_STM32_KNOWN_GAP).
+# STM32C0 does not build yet, at both standards, because of a known gap:
 #  - src/sensors/InternalTemperatureSensor.cpp needs a temperature sensor
 #    calibration that system-stm32 does not have for C0 (libart-stm32#19).
 #    It may fail only with the errors in KNOWN_GAP_PATTERN.
 # The job is blocking. All other sources of art-stm32 and the span type check
-# must compile. The job prints a NOTE when a gap is fixed. Then remove the gap
-# here, and move C0 into the family matrix when both gaps are fixed.
+# must compile, and system-stm32 must build. The job prints a NOTE when the gap
+# is fixed. Then move C0 into the family matrix.
 cross-build-c0:
   stage: test
   variables:
     STM32_FAMILY: STM32C0
     STM32_DEVICE: STM32C031xx
-    SYSTEM_STM32_KNOWN_GAP: "1"
     KNOWN_GAPS: sensors/InternalTemperatureSensor.cpp
     KNOWN_GAP_PATTERN: "'TemperatureSensorCalibration' in 'struct Adc' does not name a type|'Cal' has not been declared"
   parallel:
