@@ -51,8 +51,10 @@ cache entries before `project()`, because the toolchain file uses
 `STM32_FAMILY` to select the core flags (`-mcpu=...`). If you set them after
 `project()`, the build gets the core flags of the default family, and CMake
 does not report it. Without a build type, the compiler gets no core flags
-and the build fails. The system-stm32 README gives the supported values and
-the other settings, for example the clock and the linker script.
+and the build fails. The system-stm32
+[build documentation](https://gitlab.vandertogt.org/embedded-libraries/system-stm32/-/blob/dev/docs/building.md)
+gives the supported values and the other settings, for example the linker
+scripts.
 `ci/CMakeLists.txt` is a full example of such a superproject.
 
 If the superproject defines an interface target `art-build-config`, the

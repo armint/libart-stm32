@@ -1,7 +1,7 @@
 #pragma once
 
 // The controller exists only where system-stm32 has a USB device driver for
-// the family (see the system-stm32 README, "USB device driver"). The driver
+// the family (see system-stm32 docs/usb.md, "USB device driver"). The driver
 // defines SYSTEM_STM32_USBFS on such a device. On the others this header and
 // its source compile to nothing.
 #if __has_include(<UsbDevice.h>)
