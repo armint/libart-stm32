@@ -1,0 +1,112 @@
+name: CI
+
+# The same checks as .gitlab-ci.yml, in the public image of https://github.com/armint/firmware-build-image.
+# The comments of .gitlab-ci.yml and README.md ("Continuous integration") explain each job.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push to a pull request cancels its old run. Other runs have a group per commit, so each commit on main
+# keeps its run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # One place for the toolchain location (as in system-stm32).
+  GCC_TOOLCHAIN_PREFIX: /opt/arm-gnu-toolchain-15.3.rel2-x86_64-arm-none-eabi
+  # Branches of the dependencies that CI clones next to this repository.
+  LIBART_REF: main
+  SYSTEM_STM32_REF: main
+
+jobs:
+  # Host-native unit tests (tests/, doctest) at C++23 (std::expected, std::span) and at C++17 (libArT's own
+  # expected, the span of span-compat). The job checks that each build used that standard and type.
+  unit-tests:
+    name: unit-tests C++${{ matrix.cxx }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/armint/firmware-build-image:v1.15.0
+    strategy:
+      fail-fast: false
+      matrix:
+        cxx: ["23", "17"]
+    env:
+      CXX_STANDARD: ${{ matrix.cxx }}
+    steps:
+      - uses: actions/checkout@v5
+      # Full clones: the version of libArT and system-stm32 comes from git describe.
+      - name: Clone libArT and system-stm32
+        run: |
+          git clone --branch "$LIBART_REF" https://github.com/armint/libart.git "$GITHUB_WORKSPACE/../libArT"
+          git clone --branch "$SYSTEM_STM32_REF" https://github.com/armint/system-stm32.git "$GITHUB_WORKSPACE/../system-stm32"
+          git -C "$GITHUB_WORKSPACE/../libArT" log -1 --format='libArT %H %s'
+          git -C "$GITHUB_WORKSPACE/../system-stm32" log -1 --format='system-stm32 %H %s'
+      - run: |
+          cmake -S tests -B build-tests -G "Unix Makefiles" -D CMAKE_BUILD_TYPE=Release -D CMAKE_CXX_STANDARD=$CXX_STANDARD
+          cmake --build build-tests -j$(nproc)
+          flags=build-tests/CMakeFiles/art-stm32-tests.dir/flags.make
+          grep -q -- "-std=gnu++${CXX_STANDARD}" ${flags} || { echo "not built at C++${CXX_STANDARD}"; exit 1; }
+          if [ "${CXX_STANDARD}" = 23 ]; then
+            grep -q "ART_USE_STD_EXPECTED_SPAN=1" ${flags} || { echo "ART_USE_STD_EXPECTED_SPAN is not 1"; exit 1; }
+          else
+            grep -q "ART_USE_STD_EXPECTED_SPAN=0" ${flags} || { echo "ART_USE_STD_EXPECTED_SPAN is not 0"; exit 1; }
+            grep -q "SPAN_COMPAT_USE_STD_SPAN=0" ${flags} || { echo "span-compat does not use its own span"; exit 1; }
+          fi
+          ctest --test-dir build-tests --output-on-failure
+
+  # Cross-builds art-stm32 with libArT and system-stm32 for each family through the CI superproject in ci/
+  # (ci/cross-build.sh). STM32C0 builds with one known gap (KNOWN_GAPS, libart-stm32#19 on GitLab): the source
+  # may fail only with the errors in KNOWN_GAP_PATTERN. Move C0 to the other families when the gap is fixed.
+  cross-build:
+    name: cross-build ${{ matrix.target.device }} C++${{ matrix.cxx }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/armint/firmware-build-image:v1.15.0
+    strategy:
+      fail-fast: false
+      matrix:
+        cxx: ["23", "17"]
+        target:
+          - { family: STM32L0, device: STM32L073xx }
+          - { family: STM32G0, device: STM32G071xx }
+          - { family: STM32G0, device: STM32G0B1xx }
+          # STM32F1 leaves out the sources that need peripherals it does not have (see CMakeLists.txt).
+          - { family: STM32F1, device: STM32F103xB }
+          # STM32H5 (NUCLEO-H533RE) also builds the CDC echo image and the hardware test image at C++23.
+          - { family: STM32H5, device: STM32H533xx }
+          - family: STM32C0
+            device: STM32C031xx
+            known_gaps: sensors/InternalTemperatureSensor.cpp
+            known_gap_pattern: "'TemperatureSensorCalibration' in 'struct Adc' does not name a type|'Cal' has not been declared"
+    env:
+      STM32_FAMILY: ${{ matrix.target.family }}
+      STM32_DEVICE: ${{ matrix.target.device }}
+      CXX_STANDARD: ${{ matrix.cxx }}
+      KNOWN_GAPS: ${{ matrix.target.known_gaps }}
+      KNOWN_GAP_PATTERN: ${{ matrix.target.known_gap_pattern }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Clone libArT and system-stm32
+        run: |
+          git clone --branch "$LIBART_REF" https://github.com/armint/libart.git "$GITHUB_WORKSPACE/../libArT"
+          git clone --branch "$SYSTEM_STM32_REF" https://github.com/armint/system-stm32.git "$GITHUB_WORKSPACE/../system-stm32"
+          git -C "$GITHUB_WORKSPACE/../libArT" log -1 --format='libArT %H %s'
+          git -C "$GITHUB_WORKSPACE/../system-stm32" log -1 --format='system-stm32 %H %s'
+      - run: ci/cross-build.sh
+      # The CDC echo image and the hardware test image of the NUCLEO-H533RE, ready to flash.
+      - uses: actions/upload-artifact@v4
+        if: matrix.target.device == 'STM32H533xx' && matrix.cxx == '23'
+        with:
+          name: nucleo-h533-images
+          path: |
+            build-ci/*/examples/*/*.hex
+            build-ci/*/tests/target/*/*.hex
+          retention-days: 30

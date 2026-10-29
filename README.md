@@ -294,8 +294,16 @@ Then CMake also downloads span-compat, at the version that libArT specifies.
 
 ## Continuous integration
 
-The CI pipeline (`.gitlab-ci.yml`) clones libArT and system-stm32 (branch
-`main`) next to this repository. It has these jobs:
+Two CI systems run the same jobs. Each clones libArT and system-stm32 (branch
+`main`) next to this repository:
+
+| System | File | Runs on | Clones from | Arm GCC |
+|---|---|---|---|---|
+| GitHub Actions | `.github/workflows/ci.yml` | Each pull request and each push to `main` | github.com/armint | 15.3 (`ghcr.io/armint/firmware-build-image:v1.15.0`) |
+| GitLab CI | `.gitlab-ci.yml` | The mirror of `main`, and branches that you push to GitLab | GitLab, with the CI job token | 14.3 (`firmware-builder:v1.14.0`) |
+
+On GitHub, STM32C031xx is a cell of `cross-build` with the same known gap.
+The jobs are:
 
 - `unit-tests`: the host tests at C++23 and at C++17.
 - `cross-build`: a build of `art-stm32` for STM32L073xx, STM32G071xx,
