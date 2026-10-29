@@ -262,7 +262,7 @@ loop cannot make progress.
 
 A terminal session starts when the host sets DTR. It ends when the host
 clears DTR. The CDC-ACM function does not clear its queues at the end of a
-session ([libart#48](https://gitlab.vandertogt.org/embedded-libraries/libart/-/issues/48)).
+session (libArT issue 48 on the GitLab of the maintainers, not public).
 `UsbSerial` handles the RX side, but not the TX side:
 
 - RX: while no terminal is open, `read()` and `available()` discard the
@@ -309,12 +309,12 @@ The jobs are:
 - `cross-build`: a build of `art-stm32` for STM32L073xx, STM32G071xx,
   STM32G0B1xx, STM32F103xB and STM32H533xx, at C++23 and at C++17. The
   sources of this repository must compile with
-  `-Wall -Wextra -Wpedantic -Werror`. The STM32H533xx job also builds the
-  CDC echo image at C++23 (see [STM32H5](#stm32h5)). The job keeps the
-  `.hex` file as an artifact.
+  `-Wall -Wextra -Wpedantic -Werror`. The STM32H533xx job at C++23 also
+  builds the CDC echo image and the hardware test image (see
+  [STM32H5](#stm32h5)), and keeps both `.hex` files as an artifact
+  (`nucleo-h533-images` on GitHub).
 - `cross-build-c0`: the same build for STM32C031xx. One known gap prevents a
-  full build:
-  [#19](https://gitlab.vandertogt.org/embedded-libraries/libart-stm32/-/issues/19)
+  full build, issue 19 on the GitLab of the maintainers, not public
   (`InternalTemperatureSensor.cpp`). On `STM32C0`, the build leaves out
   `power/TicklessIdleHook`, because STM32C0 has no RTC wake-up timer.
   `InternalTemperatureSensor.cpp` can fail only with the known errors

@@ -64,7 +64,7 @@ jobs:
           ctest --test-dir build-tests --output-on-failure
 
   # Cross-builds art-stm32 with libArT and system-stm32 for each family through the CI superproject in ci/
-  # (ci/cross-build.sh). STM32C0 builds with one known gap (KNOWN_GAPS, libart-stm32#19 on GitLab): the source
+  # (ci/cross-build.sh). STM32C0 builds with one known gap (KNOWN_GAPS, issue 19 on the GitLab of the maintainers): the source
   # may fail only with the errors in KNOWN_GAP_PATTERN. Move C0 to the other families when the gap is fixed.
   cross-build:
     name: cross-build ${{ matrix.target.device }} C++${{ matrix.cxx }}
