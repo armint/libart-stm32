@@ -57,7 +57,7 @@ add_library(art-stm32 STATIC ${PROJECT_SOURCES})
 add_library(art::stm32 ALIAS art-stm32)
 
 # The sources need C++17 only. The consumer selects the standard
-# (CMAKE_CXX_STANDARD); art::core can raise it to C++23 (see README).
+# (CMAKE_CXX_STANDARD); art::core can raise it to C++23 (see docs/building.md).
 target_compile_features(art-stm32 PUBLIC cxx_std_17)
 
 target_include_directories(
