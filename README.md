@@ -304,15 +304,16 @@ The CI pipeline (`.gitlab-ci.yml`) clones libArT and system-stm32 (branch
   `-Wall -Wextra -Wpedantic -Werror`. The STM32H533xx job also builds the
   CDC echo image at C++23 (see [STM32H5](#stm32h5)). The job keeps the
   `.hex` file as an artifact.
-- `cross-build-c0`: the same build for STM32C031xx. Two known gaps prevent a
+- `cross-build-c0`: the same build for STM32C031xx. One known gap prevents a
   full build:
-  [system-stm32#27](https://gitlab.vandertogt.org/embedded-libraries/system-stm32/-/issues/27)
-  (system-stm32 does not build for C0) and
   [#19](https://gitlab.vandertogt.org/embedded-libraries/libart-stm32/-/issues/19)
-  (`InternalTemperatureSensor.cpp`). `InternalTemperatureSensor.cpp` can fail
-  only with the known errors (`KNOWN_GAP_PATTERN`). The job fails if this file
+  (`InternalTemperatureSensor.cpp`). On `STM32C0`, the build leaves out
+  `power/TicklessIdleHook`, because STM32C0 has no RTC wake-up timer.
+  `InternalTemperatureSensor.cpp` can fail only with the known errors
+  (`KNOWN_GAP_PATTERN`). The job fails if this file
   fails with another error, or if another source of `art-stm32` does not
-  compile. The job prints a note when a gap is fixed.
+  compile, or if system-stm32 does not build. The job prints a note when the
+  gap is fixed.
 
 The CI pipeline uses the latest `dev` commit of libArT and system-stm32. The
 job log shows the commits that it used.

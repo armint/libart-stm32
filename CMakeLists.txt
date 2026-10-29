@@ -40,6 +40,14 @@ if (STM32_FAMILY STREQUAL "STM32H5")
     )
 endif ()
 
+# STM32C0: power/TicklessIdleHook uses the RTC wake-up timer, and C0 has none
+# (system-stm32 leaves out hw::Rtc::armWakeup() there).
+if (STM32_FAMILY STREQUAL "STM32C0")
+    list(REMOVE_ITEM PROJECT_SOURCES
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/power/TicklessIdleHook.cpp"
+    )
+endif ()
+
 file(GLOB_RECURSE PROJECT_HEADERS
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
