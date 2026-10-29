@@ -308,8 +308,9 @@ The CI pipeline (`.gitlab-ci.yml`) clones libArT and system-stm32 (branch
   full build:
   [#19](https://gitlab.vandertogt.org/embedded-libraries/libart-stm32/-/issues/19)
   (`InternalTemperatureSensor.cpp`). On `STM32C0`, the build leaves out
-  `power/TicklessIdleHook`, because STM32C0 has no RTC wake-up timer. `InternalTemperatureSensor.cpp` can fail
-  only with the known errors (`KNOWN_GAP_PATTERN`). The job fails if this file
+  `power/TicklessIdleHook`, because STM32C0 has no RTC wake-up timer.
+  `InternalTemperatureSensor.cpp` can fail only with the known errors
+  (`KNOWN_GAP_PATTERN`). The job fails if this file
   fails with another error, or if another source of `art-stm32` does not
   compile, or if system-stm32 does not build. The job prints a note when the
   gap is fixed.

@@ -17,10 +17,6 @@
 #   KNOWN_GAP_PATTERN           with KNOWN_GAPS: extended regular expression.
 #                               Every "error:" line of a failing known gap
 #                               must match it. Another error fails the job.
-#   SYSTEM_STM32_KNOWN_GAP      with KNOWN_GAPS: 1 if system-stm32 does not
-#                               build for the family. The script builds it,
-#                               ignores the result, and prints a NOTE when it
-#                               builds. Otherwise system-stm32 must build.
 #   BUILD_DIR                   optional, default: build-ci/<device>-cpp<std>
 #   EXTRA_CMAKE_ARGS            optional, more configure arguments, e.g.
 #                               -D FETCHCONTENT_SOURCE_DIR_SPAN_COMPAT=<dir>
@@ -48,27 +44,29 @@ if [ -z "${KNOWN_GAPS:-}" ]; then
 else
    : "${KNOWN_GAP_PATTERN:?KNOWN_GAPS needs KNOWN_GAP_PATTERN}"
    status=0
-   if [ "${SYSTEM_STM32_KNOWN_GAP:-0}" = 1 ]; then
-      if cmake --build "$BUILD" --target system-stm32 -j"$(nproc)" > "$BUILD/system-stm32.log" 2>&1; then
-         echo "NOTE: system-stm32 builds now. Remove SYSTEM_STM32_KNOWN_GAP."
-      else
-         echo "known gap: system-stm32 does not build ($(grep -c 'error:' "$BUILD/system-stm32.log") errors, see $BUILD/system-stm32.log)"
-      fi
-   else
-      cmake --build "$BUILD" --target system-stm32 -j"$(nproc)" || { echo "FAIL: system-stm32 does not build"; status=1; }
-   fi
+   cmake --build "$BUILD" --target system-stm32 -j"$(nproc)" || { echo "FAIL: system-stm32 does not build"; status=1; }
    # The /fast targets compile without their dependencies, so the sources of
    # art-stm32 compile also when system-stm32 does not build.
    make -C "$BUILD" -k -j"$(nproc)" art-stm32/fast span-type-check/fast || true
    objects="$BUILD/libart-stm32/CMakeFiles/art-stm32.dir"
+   checked=0
    while read -r source; do
       relative="${source#"$ROOT/"}"
-      # CMakeLists.txt leaves out some sources for some families.
-      grep -qF "art-stm32.dir/$relative.obj:" "$objects/build.make" || continue
       gap=0
       for known in $KNOWN_GAPS; do
          [ "src/$known" = "$relative" ] && gap=1
       done
+      # CMakeLists.txt leaves out some sources for some families.
+      if ! grep -qF "art-stm32.dir/$relative.obj:" "$objects/build.make"; then
+         if [ "$gap" = 1 ]; then
+            echo "FAIL: $relative is in KNOWN_GAPS, but the build leaves it out"
+            status=1
+         else
+            echo "skipped: $relative is not part of the build for $STM32_FAMILY"
+         fi
+         continue
+      fi
+      checked=$((checked + 1))
       if [ -f "$objects/$relative.obj" ]; then
          [ "$gap" = 1 ] && echo "NOTE: $relative compiles now. Remove it from KNOWN_GAPS."
       elif [ "$gap" = 1 ]; then
@@ -93,6 +91,7 @@ else
          status=1
       fi
    done < <(find "$ROOT/src" -name '*.cpp' | sort)
+   [ "$checked" -gt 0 ] || { echo "FAIL: the build has none of the sources (format of $objects/build.make?)"; status=1; }
    [ -f "$BUILD/CMakeFiles/span-type-check.dir/SpanTypeCheck.cpp.obj" ] || { echo "FAIL: SpanTypeCheck.cpp does not compile"; status=1; }
    [ "$status" = 0 ] || exit 1
 fi
