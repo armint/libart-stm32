@@ -17,10 +17,10 @@ workflow:
       when: never
     - if: "$CI_COMMIT_BRANCH"
 
-# libArT, system-stm32 and span-compat are private repositories. Git gets the
+# On this GitLab, libArT and system-stm32 are private projects. Git gets the
 # CI job token from this credential helper, so no token is part of a URL or of
-# a file in the repository. Each repository must allow job tokens of this
-# project (CI/CD job token allowlist).
+# a file in the repository. Each project must allow job tokens of this
+# project (CI/CD job token allowlist). span-compat comes from GitHub.
 .private-dependencies: &private-dependencies
   - git config --global credential.https://${CI_SERVER_HOST}.helper
       '!f() { echo username=gitlab-ci-token; echo "password=${CI_JOB_TOKEN}"; }; f'
