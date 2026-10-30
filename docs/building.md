@@ -4,9 +4,9 @@
 
 The library needs these items:
 
-- [libArT](https://gitlab.vandertogt.org/embedded-libraries/libart), CMake
+- [libArT](https://github.com/armint/libart), CMake
   target `art::core`.
-- [system-stm32](https://gitlab.vandertogt.org/embedded-libraries/system-stm32),
+- [system-stm32](https://github.com/armint/system-stm32),
   CMake target `system-stm32`. system-stm32 also supplies the toolchain file
   (`cmake/gcc_arm.cmake`), the start-up code and the linker scripts.
 - An `arm-none-eabi` GCC toolchain and CMake 3.20 or later.
@@ -52,7 +52,7 @@ cache entries before `project()`, because the toolchain file uses
 `project()`, the build gets the core flags of the default family, and CMake
 does not report it. Without a build type, the compiler gets no core flags
 and the build fails. The system-stm32
-[build documentation](https://gitlab.vandertogt.org/embedded-libraries/system-stm32/-/blob/dev/docs/building.md)
+[build documentation](https://github.com/armint/system-stm32/blob/main/docs/building.md)
 gives the supported values and the other settings, for example the linker
 scripts.
 `ci/CMakeLists.txt` is a full example of such a superproject.
@@ -76,7 +76,7 @@ The standard selects the types of `art::expected` and `art::span` (libArT,
 | C++23 | `ON` (1), the default | `std::expected` | `std::span` |
 | C++17 | `OFF` (0) | libArT's own expected | `span_compat::span` |
 
-At C++17, the library needs span-compat (`embedded-libraries/span-compat`).
+At C++17, the library needs [span-compat](https://github.com/armint/span-compat).
 It gets span-compat through libArT (`art::core`) and system-stm32. This
 library has no CMake setting for span-compat. span-compat must use its own
 span (`SPAN_COMPAT_USE_STD_SPAN=OFF`). libArT and system-stm32 set this value

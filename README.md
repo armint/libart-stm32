@@ -1,9 +1,9 @@
 # libart-stm32
 
 libart-stm32 connects the hardware-independent interfaces of
-[libArT](https://gitlab.vandertogt.org/embedded-libraries/libart) to the
+[libArT](https://github.com/armint/libart) to the
 STM32 peripheral drivers of
-[system-stm32](https://gitlab.vandertogt.org/embedded-libraries/system-stm32).
+[system-stm32](https://github.com/armint/system-stm32).
 libArT defines interfaces such as `Readable`, `Writable`, `TemperatureSensor`
 and the USB device stack. system-stm32 gives register-level drivers such as
 `hw::Usart` and `hw::UsbDevice`. This library implements the libArT

@@ -61,7 +61,7 @@ After `start()`, the host resets the device and sends SETUP packets. If
 
 `setDoubleBufferedOut(address)` makes the controller open one
 bulk OUT endpoint with two buffers (see the
-[system-stm32 USB documentation](https://gitlab.vandertogt.org/embedded-libraries/system-stm32/-/blob/dev/docs/usb.md),
+[system-stm32 USB documentation](https://github.com/armint/system-stm32/blob/main/docs/usb.md),
 "Double-buffered bulk OUT"). Call it before `begin()`. The hardware then
 receives the next packet while the main loop handles the last packet.
 Thus the host gets fewer NAKs, and the OUT transfer rate goes up.
