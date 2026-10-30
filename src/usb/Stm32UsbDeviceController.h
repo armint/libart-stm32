@@ -1,7 +1,7 @@
 #pragma once
 
 // The controller exists only where system-stm32 has a USB device driver for
-// the family (see the system-stm32 README, "USB device driver"). The driver
+// the family (see system-stm32 docs/usb.md, "USB device driver"). The driver
 // defines SYSTEM_STM32_USBFS on such a device. On the others this header and
 // its source compile to nothing.
 #if __has_include(<UsbDevice.h>)
@@ -89,7 +89,7 @@ static_assert(std::is_same<art::span<const uint8_t>, hw::span<const uint8_t>>::v
  * bus events (reset, suspend, resume). 16 entries are enough for CDC-ACM and
  * MSC together, while the main loop runs poll(). droppedEvents() counts
  * the events that did not fit: the newest event is dropped. A dropped event
- * cannot be recovered without a new enumeration (see README, "Queue size").
+ * cannot be recovered without a new enumeration (see docs/usb.md, "Queue size").
  *
  * Threading: call every function except the interrupt callback from the main
  * loop, the same context that runs poll().
